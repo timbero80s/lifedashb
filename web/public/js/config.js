@@ -99,8 +99,8 @@ export const CONFIG = {
   },
 
   // --- Backend ---------------------------------------------------------
-  // Where the serverless proxies live. Default works on Netlify.
-  // In pure static / demo mode the dashboard falls back to mock data for
-  // anything that needs the backend (calendar, trains, ISS, Spurs table).
-  apiBase: '/.netlify/functions/api',
+  // Where the serverless proxies live. "/api" is redirected to the function
+  // by netlify.toml and gets proper edge caching. In pure static / demo mode
+  // the dashboard falls back to mock data for anything backend-dependent.
+  apiBase: '/api',
 };
