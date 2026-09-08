@@ -20,12 +20,11 @@ export const CONFIG = {
   weekStartsMonday: true,
 
   // --- Trains ------------------------------------------------------------
-  // CRS (3-letter) station codes. Maidenhead is "MAI". London terminus for
-  // the fast trains is London Paddington = "PAD".
+  // CRS (3-letter) station codes. Maidenhead is "MAI". London terminus is
+  // London Paddington = "PAD". (Set via TRAIN_STATION / TRAIN_LONDON env vars
+  // on the backend; these are just labels for the display.)
   trains: {
-    station: 'MAI',
     stationLabel: 'MAIDENHEAD',
-    londonTerminus: 'PAD',
     londonLabel: 'LONDON PADDINGTON',
     rows: 5, // how many services to show per direction
   },

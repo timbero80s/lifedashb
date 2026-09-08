@@ -416,86 +416,92 @@ async function fillFromSportsDB(c, rec) {
 }
 
 // ===========================================================================
-//  TRAINS  (Realtime Trains API — api.rtt.io)
+//  TRAINS  (Realtime Trains "next generation" API — data.rtt.io)
+//  Auth: RTT_TOKEN is the refresh token from https://api-portal.rtt.io ,
+//  exchanged here for a ~20-minute access token (cached on the warm lambda).
 // ===========================================================================
 const STATION = process.env.TRAIN_STATION || 'MAI';
 const LONDON = process.env.TRAIN_LONDON || 'PAD';
-const LONDON_NAME = 'Paddington';
+const RTT_BASE = 'https://data.rtt.io';
 
-function rttAuth() {
-  const u = process.env.RTT_USERNAME, p = process.env.RTT_PASSWORD;
-  if (!u || !p) return null;
-  return 'Basic ' + Buffer.from(`${u}:${p}`).toString('base64');
+let _rttAccess = null; // { token, exp }
+
+// RTT returns naive datetimes ("2026-09-08T18:11:00") that mean Europe/London
+// local time. Parse them to a correct absolute instant.
+function rttParse(s) {
+  if (!s) return null;
+  if (/(?:Z|[+-]\d\d:?\d\d)$/.test(s)) return new Date(s);
+  const asUTC = Date.parse(s + 'Z');
+  return new Date(asUTC - tzOffsetMs('Europe/London', new Date(asUTC)));
 }
 
-function hhmmToISO(hhmm, baseDate) {
-  if (!hhmm || hhmm.length < 4) return null;
-  const h = +hhmm.slice(0, 2), m = +hhmm.slice(2, 4);
-  // baseDate is a Date at London local midnight expressed as UTC ms map; approximate with Europe/London offset
-  const d = new Date(baseDate);
-  d.setUTCHours(h, m, 0, 0);
-  // shift so the wall clock reads hh:mm in London
-  const offset = tzOffsetMs('Europe/London', d);
-  let t = d.getTime() - offset;
-  // handle a service that has rolled past midnight
-  if (t < Date.now() - 6 * 3600e3) t += 864e5;
-  return new Date(t).toISOString();
+async function rttAccessToken() {
+  const refresh = process.env.RTT_TOKEN || process.env.RTT_PASSWORD;
+  if (!refresh) return null;
+  if (_rttAccess && _rttAccess.exp - 60000 > Date.now()) return _rttAccess.token;
+  // the portal issues a refresh token; swap it for a short-life access token
+  try {
+    const r = await j(`${RTT_BASE}/api/get_access_token`, {
+      headers: { Authorization: `Bearer ${refresh}` },
+    });
+    _rttAccess = { token: r.token, exp: new Date(r.validUntil).getTime() };
+    return _rttAccess.token;
+  } catch (e) {
+    // maybe RTT_TOKEN is already a long-life access token — use it directly
+    console.warn('rtt token exchange failed, trying token as-is', e.message);
+    _rttAccess = { token: refresh, exp: Date.now() + 5 * 60000 };
+    return refresh;
+  }
+}
+
+function rttStatus(t, schedDate, expDate) {
+  if (!t) return 'ON TIME';
+  if (t.isCancelled || t.displayAs === 'CANCELLED') return 'CANCELLED';
+  if (!schedDate || !expDate) return 'ON TIME';
+  const late = Math.round((expDate - schedDate) / 60000);
+  if (late <= 0) return 'ON TIME';
+  const hhmm = expDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/London' });
+  return `EXP ${hhmm}`;
+}
+
+function mapService(s, kind) {
+  const t = s.temporalData && s.temporalData[kind === 'dep' ? 'departure' : 'arrival'];
+  if (!t) return null;
+  const schedDate = rttParse(t.scheduleAdvertised || t.scheduleInternal);
+  if (!schedDate) return null;
+  const expDate = rttParse(t.realtimeActual || t.realtimeForecast) || schedDate;
+  const ends = kind === 'dep' ? s.destination : s.origin;
+  const place = ((ends && ends[0] && ends[0].location && ends[0].location.description) || '').replace(/^London /, '');
+  const plat = s.locationMetadata && s.locationMetadata.platform;
+  return {
+    scheduled: schedDate.toISOString(),
+    expected: expDate.toISOString(),
+    place: kind === 'dep' ? place : 'ex ' + place,
+    platform: (plat && (plat.forecast || plat.planned)) || '?',
+    status: rttStatus(t, schedDate, expDate),
+    operator: (s.scheduleMetadata && s.scheduleMetadata.operator && s.scheduleMetadata.operator.name) || '',
+  };
 }
 
 async function trains() {
-  const auth = rttAuth();
-  if (!auth) return { toLondon: [], fromLondon: [], note: 'RTT_USERNAME / RTT_PASSWORD not set' };
+  const access = await rttAccessToken();
+  if (!access) return { toLondon: [], fromLondon: [], note: 'RTT_TOKEN not set' };
+  const headers = { Authorization: `Bearer ${access}` };
 
-  const headers = { Authorization: auth };
-  const now = new Date();
-  const baseMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-
-  const [dep, arr] = await Promise.all([
-    j(`https://api.rtt.io/api/v1/json/search/${STATION}`, { headers }),
-    j(`https://api.rtt.io/api/v1/json/search/${STATION}/arrivals`, { headers }),
+  const [toRaw, fromRaw] = await Promise.all([
+    j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterTo=gb-nr:${LONDON}&timeWindow=150`, { headers }),
+    j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterFrom=gb-nr:${LONDON}&timeWindow=150`, { headers }),
   ]);
 
-  const toLondon = (dep.services || [])
-    .filter((s) => s.locationDetail && (s.locationDetail.destination || []).some((d) => /paddington/i.test(d.description || '')))
-    .map((s) => {
-      const ld = s.locationDetail;
-      return {
-        scheduled: hhmmToISO(ld.gbttBookedDeparture, baseMidnight),
-        expected: hhmmToISO(ld.realtimeDeparture || ld.gbttBookedDeparture, baseMidnight),
-        place: (ld.destination[0] && ld.destination[0].description) || LONDON_NAME,
-        platform: ld.platform || '?',
-        status: statusOf(ld.gbttBookedDeparture, ld.realtimeDeparture, ld.realtimeDepartureActual, ld.cancelReasonShortText),
-        operator: s.atocName,
-      };
-    })
-    .filter((x) => x.scheduled)
+  const clean = (arr) => arr.filter(Boolean)
+    .filter((x) => new Date(x.expected).getTime() > Date.now() - 5 * 60000)
     .slice(0, 8);
 
-  const fromLondon = (arr.services || [])
-    .filter((s) => s.locationDetail && (s.locationDetail.origin || []).some((o) => /paddington/i.test(o.description || '')))
-    .map((s) => {
-      const ld = s.locationDetail;
-      return {
-        scheduled: hhmmToISO(ld.gbttBookedArrival, baseMidnight),
-        expected: hhmmToISO(ld.realtimeArrival || ld.gbttBookedArrival, baseMidnight),
-        place: 'ex ' + ((ld.origin[0] && ld.origin[0].description) || LONDON_NAME),
-        platform: ld.platform || '?',
-        status: statusOf(ld.gbttBookedArrival, ld.realtimeArrival, ld.realtimeArrivalActual, ld.cancelReasonShortText),
-        operator: s.atocName,
-      };
-    })
-    .filter((x) => x.scheduled)
-    .slice(0, 8);
-
-  return { toLondon, fromLondon, station: STATION };
-}
-
-function statusOf(booked, realtime, actual, cancel) {
-  if (cancel) return 'CANCELLED';
-  if (!realtime || realtime === booked) return 'ON TIME';
-  const d = (+realtime.slice(0, 2) * 60 + +realtime.slice(2, 4)) - (+booked.slice(0, 2) * 60 + +booked.slice(2, 4));
-  if (d <= 0) return 'ON TIME';
-  return `EXP ${realtime.slice(0, 2)}:${realtime.slice(2, 4)}`;
+  return {
+    toLondon: clean((toRaw.services || []).map((s) => mapService(s, 'dep'))),
+    fromLondon: clean((fromRaw.services || []).map((s) => mapService(s, 'arr'))),
+    station: STATION,
+  };
 }
 
 // ===========================================================================
