@@ -12,9 +12,11 @@
 const headers = (seconds) => ({
   'content-type': 'application/json',
   'access-control-allow-origin': '*',
-  // let Netlify's CDN serve a cached good response and keep serving it while
-  // it revalidates — this is what keeps flaky upstream APIs from flickering
-  'cache-control': `public, max-age=${seconds}, stale-while-revalidate=${seconds * 4}`,
+  // browser cache
+  'cache-control': `public, max-age=${Math.min(seconds, 120)}`,
+  // Netlify's edge CDN: serve a cached good response and keep serving it while
+  // it revalidates in the background — this is what smooths over flaky upstreams
+  'netlify-cdn-cache-control': `public, durable, s-maxage=${seconds}, stale-while-revalidate=${seconds * 6}`,
 });
 
 // how long the CDN may cache each service's response
