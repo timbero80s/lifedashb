@@ -218,10 +218,13 @@ function emitEvent(ev, out, windowStart, windowEnd) {
 //  FOOTBALL
 // ===========================================================================
 const CLUBS = [
-  { key: 'spurs', name: 'TOTTENHAM', fdId: 73, fdComp: 'PL', sdb: 'Tottenham', league: '4328' },
-  { key: 'maidenhead', name: 'MAIDENHEAD UTD', fdId: null, sdb: 'Maidenhead United', league: '4574' },
-  { key: 'ferro', name: 'FERRO C. OESTE', fdId: null, sdb: 'Ferro Carril Oeste', league: '4406' },
+  { key: 'spurs', name: 'TOTTENHAM', fdId: 73, fdComp: 'PL', sdb: 'Tottenham Hotspur', league: '4328' },
+  { key: 'maidenhead', name: 'MAIDENHEAD UTD', fdId: null, sdb: 'Maidenhead United', league: '4682' },
+  { key: 'ferro', name: 'FERRO C. OESTE', fdId: null, sdb: 'Ferro Carril Oeste', league: '4616' },
 ];
+
+// reject reserve / women / youth sides when picking a team from a search
+const EXCLUDE_TEAM = /\b(women|ladies|femen|reserves?|academy|youth|u1[0-9]|u2[0-9]|sub-?20|'?b'?|ii)\b/i;
 
 function seasonCandidates() {
   const now = new Date();
@@ -289,7 +292,10 @@ async function fillFromSportsDB(c, rec) {
   const key = process.env.SPORTSDB_KEY || '3';
   const base = `https://www.thesportsdb.com/api/v1/json/${key}`;
   const search = await j(`${base}/searchteams.php?t=${encodeURIComponent(c.sdb)}`);
-  const team = (search.teams || [])[0];
+  const candidates = (search.teams || []).filter((t) =>
+    (!t.strSport || /soccer|football/i.test(t.strSport)) && !EXCLUDE_TEAM.test(t.strTeam || ''));
+  const team = candidates.find((t) => (t.strTeam || '').toLowerCase() === c.sdb.toLowerCase())
+    || candidates[0] || (search.teams || [])[0];
   const teamId = team && team.idTeam;
   const teamName = team && team.strTeam;
 
