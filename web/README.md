@@ -3,10 +3,10 @@
 **Live:** https://timbero-wall-dashboard.netlify.app
 (Netlify site `timbero-wall-dashboard`, deployed 2026-09-08.)
 
-**Still to do:** add `RTT_USERNAME` + `RTT_PASSWORD` in Netlify for the trains
-widget — sign up at https://api.rtt.io/ → Account → *Create API auth credential*,
-then Netlify → Site configuration → Environment variables → add both → Deploys →
-Trigger deploy. Everything else is live.
+**Still to do:** add `RTT_TOKEN` in Netlify for the trains widget — sign up at
+https://api-portal.rtt.io/ and request an API token, then Netlify → Site
+configuration → Environment variables → add **key** `RTT_TOKEN`, **value** the
+whole token string → Deploys → Trigger deploy. Everything else is live.
 
 To redeploy after editing files in `web/`: from the `web/` directory run
 `npx -y @netlify/mcp@latest --site-id bbd13bb4-48d1-447b-8e2f-49a779b47c87`
@@ -54,7 +54,7 @@ with demo placeholders for calendar / football / trains / ISS until you deploy.
 |---|---|---|
 | Netlify | https://app.netlify.com/signup | hosting + the proxy |
 | football-data.org | https://www.football-data.org/client/register | Tottenham table & fixtures (`FOOTBALL_DATA_TOKEN`) |
-| Realtime Trains | https://api.rtt.io/ → sign up → **Account → Create API auth credential** | train times (`RTT_USERNAME` / `RTT_PASSWORD`) |
+| Realtime Trains | https://api-portal.rtt.io/ → sign up → request an API token | train times (`RTT_TOKEN`) |
 | N2YO (optional) | https://www.n2yo.com/api/ | better ISS passes (`N2YO_API_KEY`). If you skip it a keyless service is used automatically. |
 
 For **thesportsdb** (Maidenhead Utd + Ferro) no signup is required — the free
@@ -99,8 +99,7 @@ Add the ones you have (see `.env.example` for the full list):
 ```
 CALENDAR_ICS_URLS   = https://calendar.google.com/.../basic.ics,https://calendar.google.com/.../basic.ics
 FOOTBALL_DATA_TOKEN = <your football-data.org token>
-RTT_USERNAME        = <your rtt.io api username>
-RTT_PASSWORD        = <your rtt.io api password>
+RTT_TOKEN           = <your api-portal.rtt.io token>
 N2YO_API_KEY        = <optional>
 SPORTSDB_KEY        = 3
 ```
