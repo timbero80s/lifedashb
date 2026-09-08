@@ -1,6 +1,23 @@
 import { CONFIG } from '../config.js';
-import { $, el, fetchJSON, withCache, every } from '../util.js';
+import { $, el, fetchJSON, withCache, every, cache } from '../util.js';
 import { reportStatus } from '../app.js';
+
+// The free football sources are rate-limited and flaky, so a fresh fetch often
+// comes back thinner than a previous one. Keep the best info we've seen per club.
+function mergeClub(fresh, prev) {
+  if (!prev) return fresh;
+  const out = { ...fresh };
+  if (!out.position && prev.position) {
+    out.position = prev.position; out.played = prev.played; out.points = prev.points;
+  }
+  if (!out.form && prev.form) out.form = prev.form;
+  if (!out.nextMatch && prev.nextMatch && new Date(prev.nextMatch.utcDate) > Date.now()) {
+    out.nextMatch = prev.nextMatch;
+  }
+  if (!out.lastMatch && prev.lastMatch) out.lastMatch = prev.lastMatch;
+  if (out.position || out.nextMatch || out.lastMatch) out.note = null;
+  return out;
+}
 
 const ord = (n) => {
   if (!n) return '—';
@@ -19,10 +36,13 @@ export function initFootball() {
   const body = $('#football-body');
 
   async function load() {
+    const prev = (cache.get('football') || {}).value || null;
     const { value, stale } = await withCache('football', async () => {
-      const r = await fetchJSON(`${CONFIG.apiBase}?service=football`);
+      const r = await fetchJSON(`${CONFIG.apiBase}?service=football`, {}, 20000);
       if (!r || !Array.isArray(r.clubs)) throw new Error('bad football payload');
-      return r.clubs;
+      // merge each club against what we had before, then persist the richer set
+      const merged = r.clubs.map((c) => mergeClub(c, prev && prev.find((p) => p.key === c.key)));
+      return merged;
     });
     let clubs = value, isDemo = false;
     if (!clubs) { clubs = demo(); isDemo = true; }

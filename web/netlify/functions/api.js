@@ -9,11 +9,16 @@
 //    SPORTSDB_KEY        thesportsdb key (optional, default "3")
 // ============================================================================
 
-const JSON_HEADERS = {
+const headers = (seconds) => ({
   'content-type': 'application/json',
-  'cache-control': 'public, max-age=60',
   'access-control-allow-origin': '*',
-};
+  // let Netlify's CDN serve a cached good response and keep serving it while
+  // it revalidates — this is what keeps flaky upstream APIs from flickering
+  'cache-control': `public, max-age=${seconds}, stale-while-revalidate=${seconds * 4}`,
+});
+
+// how long the CDN may cache each service's response
+const TTL = { calendar: 300, football: 1800, trains: 45, iss: 3600 };
 
 exports.handler = async (event) => {
   const service = (event.queryStringParameters || {}).service || '';
@@ -25,23 +30,31 @@ exports.handler = async (event) => {
       case 'trains':   data = await trains(); break;
       case 'iss':      data = await iss(event.queryStringParameters || {}); break;
       default:
-        return { statusCode: 400, headers: JSON_HEADERS, body: JSON.stringify({ error: 'unknown service' }) };
+        return { statusCode: 400, headers: headers(60), body: JSON.stringify({ error: 'unknown service' }) };
     }
-    return { statusCode: 200, headers: JSON_HEADERS, body: JSON.stringify(data) };
+    return { statusCode: 200, headers: headers(TTL[service] || 60), body: JSON.stringify(data) };
   } catch (err) {
     console.error(service, err);
     return {
       statusCode: 502,
-      headers: JSON_HEADERS,
+      headers: headers(15),
       body: JSON.stringify({ error: String(err && err.message || err), service }),
     };
   }
 };
 
-const j = async (url, opts) => {
-  const r = await fetch(url, opts);
-  if (!r.ok) throw new Error(`${url.split('?')[0]} -> ${r.status}`);
-  return r.json();
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const j = async (url, opts, retries = 1) => {
+  for (let attempt = 0; ; attempt++) {
+    const r = await fetch(url, opts);
+    if (r.ok) return r.json();
+    if ((r.status === 429 || r.status >= 500) && attempt < retries) {
+      await sleep(500 + attempt * 700);
+      continue;
+    }
+    throw new Error(`${url.split('?')[0]} -> ${r.status}`);
+  }
 };
 const txt = async (url, opts) => {
   const r = await fetch(url, opts);
@@ -229,9 +242,10 @@ const EXCLUDE_TEAM = /\b(women|ladies|femen|reserves?|academy|youth|u1[0-9]|u2[0
 function seasonCandidates() {
   const now = new Date();
   const Y = now.getUTCFullYear();
-  const euCurrent = now.getUTCMonth() >= 6 ? `${Y}-${Y + 1}` : `${Y - 1}-${Y}`;
-  const euPrev = now.getUTCMonth() >= 6 ? `${Y - 1}-${Y}` : `${Y - 2}-${Y - 1}`;
-  return [euCurrent, euPrev, `${Y}`, `${Y - 1}`];
+  const eu = now.getUTCMonth() >= 6 ? `${Y}-${Y + 1}` : `${Y - 1}-${Y}`;
+  // European (Aug-May) form first, then calendar-year form for leagues like
+  // Argentina's. Two tries is enough; more just burns the shared rate limit.
+  return [eu, `${Y}`];
 }
 
 async function football() {
