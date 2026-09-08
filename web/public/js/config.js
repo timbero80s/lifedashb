@@ -44,24 +44,23 @@ export const CONFIG = {
   //  HOUSEHOLD  ← the bit you need to fill in
   // ==========================================================================
   household: {
-    // Bin collection. Set `day` to your collection weekday (0=Sun … 6=Sat),
-    // and `anchorDate` to any date you KNOW was a particular collection, with
-    // `anchorType` naming which bin went out that week. The alternating cycle
-    // is worked out from there. `weekly` bins go out every collection day.
+    // Bins. `day` is the evening they go OUT (0=Sun, 1=Mon … 6=Sat).
+    // Blue + food every week; green and black alternate. The cycle is
+    // derived from anchorDate/anchorType, taken from the calendar entries
+    // "Green and Blue Bins" (Thu 10 Sep) and "Black and Blue bins" (Thu 17).
     bins: {
       enabled: true,
-      day: 3,                       // 3 = Wednesday  ← CHECK THIS
-      anchorDate: '2026-09-09',     // a known collection date  ← CHECK THIS
-      anchorType: 'black',          // which bin went out that day ← CHECK THIS
+      day: 4,                       // Thursday night
+      anchorDate: '2026-09-10',
+      anchorType: 'green',
       alternating: [
-        { key: 'black', label: 'Black bin',  colour: '#3A3A3C' },
-        { key: 'blue',  label: 'Blue bin',   colour: '#0A84FF' },
+        { key: 'green', label: 'Green', colour: '#30D158' },
+        { key: 'black', label: 'Black', colour: '#6E6E73' },
       ],
       weekly: [
-        { key: 'food', label: 'Food waste', colour: '#30D158' },
+        { key: 'blue', label: 'Blue', colour: '#0A84FF' },
+        { key: 'food', label: 'Food', colour: '#A2845E' },
       ],
-      // how many hours before collection to start saying "out tonight"
-      remindHoursBefore: 18,
     },
 
     // School terms — add or edit ranges as you get the dates. Anything outside
