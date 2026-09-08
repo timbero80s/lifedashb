@@ -248,7 +248,36 @@ function seasonCandidates() {
   return [eu, `${Y}`];
 }
 
+// Netlify Blobs — a tiny persistent store so a rate-limited fetch can fall
+// back to the last good data instead of showing "unavailable".
+async function blobStore() {
+  try {
+    const { getStore } = await import('@netlify/blobs');
+    return getStore('dashboard');
+  } catch { return null; }
+}
+
+function mergeClubRec(fresh, prev) {
+  if (!prev) return fresh;
+  const out = { ...fresh };
+  if (!out.position && prev.position) {
+    out.position = prev.position; out.played = prev.played; out.points = prev.points;
+  }
+  if (!out.form && prev.form) out.form = prev.form;
+  if (!out.lastMatch && prev.lastMatch) out.lastMatch = prev.lastMatch;
+  if (!out.nextMatch && prev.nextMatch && new Date(prev.nextMatch.utcDate).getTime() > Date.now()) {
+    out.nextMatch = prev.nextMatch;
+  }
+  if (out.position || out.nextMatch || out.lastMatch) out.note = null;
+  return out;
+}
+
 async function football() {
+  const store = await blobStore();
+  let prev = null;
+  if (store) { try { prev = await store.get('football', { type: 'json' }); } catch {} }
+  const prevClubs = (prev && prev.clubs) || [];
+
   const out = [];
   for (const c of CLUBS) {
     const rec = { key: c.key, name: c.name, position: null, played: null, points: null,
@@ -262,12 +291,14 @@ async function football() {
     } catch (e) {
       rec.note = 'live data unavailable';
       console.warn('football', c.key, e.message);
-      // best effort: try the other source
       try { if (!rec.position) await fillFromSportsDB(c, rec); } catch {}
     }
-    out.push(rec);
+    out.push(mergeClubRec(rec, prevClubs.find((p) => p.key === c.key)));
   }
-  return { clubs: out };
+
+  const payload = { clubs: out, updated: new Date().toISOString() };
+  if (store) { try { await store.setJSON('football', payload); } catch {} }
+  return payload;
 }
 
 async function fillFromFootballData(c, rec) {
