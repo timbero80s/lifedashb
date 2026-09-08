@@ -1,105 +1,107 @@
 // ============================================================================
 //  WALL DASHBOARD — user configuration
-//  Everything in this file is safe to be public. Secrets (API keys, the
-//  private calendar links) live in Netlify environment variables instead.
-//  Edit the values below, save, and redeploy (or just refresh in demo mode).
+//  Everything here is safe to be public. Secrets (API tokens, the private
+//  calendar links) live in Netlify environment variables instead.
 // ============================================================================
 
 export const CONFIG = {
-  // --- Location -------------------------------------------------------------
-  // Your postcode is used to look up latitude / longitude (via postcodes.io)
-  // for weather, sun times and ISS passes. Coordinates are cached after the
-  // first successful lookup.
+  // --- Location -----------------------------------------------------------
   postcode: 'SL6 7QT',
   placeLabel: 'MAIDENHEAD',
-  countryLabel: 'UK',
-
-  // --- Clock / locale ------------------------------------------------------
   timezone: 'Europe/London',
-  clock24h: true,
-  weekStartsMonday: true,
 
-  // --- Trains ------------------------------------------------------------
-  // CRS (3-letter) station codes. Maidenhead is "MAI". London terminus is
-  // London Paddington = "PAD". (Set via TRAIN_STATION / TRAIN_LONDON env vars
-  // on the backend; these are just labels for the display.)
+  // --- Trains --------------------------------------------------------------
+  // Station codes are set on the backend (TRAIN_STATION / TRAIN_LONDON).
   trains: {
-    stationLabel: 'MAIDENHEAD',
-    londonLabel: 'LONDON PADDINGTON',
-    rows: 5, // how many services to show per direction
+    rows: 3,
+    // only escalate a delay to the alert lane during travel hours
+    commuteWindows: [['07:00', '09:15'], ['16:30', '19:00']],
+    escalateDelayMins: 10,
   },
 
-  // --- Football ---------------------------------------------------------
-  // For each club: a display name, and hints the backend uses to find it.
-  //  - footballDataId: numeric team id on football-data.org (Premier League
-  //    teams only on the free tier). Tottenham = 73. Leave null otherwise.
-  //  - sportsDbSearch: exact team name for thesportsdb.com lookup.
-  //  - sportsDbLeagueId: league id on thesportsdb for the standings table.
+  // --- Football ------------------------------------------------------------
+  // `colour` is only used for the 3px identity bar down the left of each row.
   clubs: [
-    {
-      key: 'spurs',
-      name: 'TOTTENHAM',
-      footballDataId: 73,
-      footballDataCompetition: 'PL',
-      sportsDbSearch: 'Tottenham',
-      sportsDbLeagueId: '4328', // English Premier League
-    },
-    {
-      key: 'maidenhead',
-      name: 'MAIDENHEAD UTD',
-      footballDataId: null,
-      sportsDbSearch: 'Maidenhead United',
-      sportsDbLeagueId: '4574', // English National League (Vanarama)
-    },
-    {
-      key: 'ferro',
-      name: 'FERRO C. OESTE',
-      footballDataId: null,
-      sportsDbSearch: 'Ferro Carril Oeste',
-      sportsDbLeagueId: '4406', // Argentinian Primera Nacional
-    },
+    { key: 'spurs',      name: 'Tottenham',      colour: '#132257' },
+    { key: 'maidenhead', name: 'Maidenhead Utd', colour: '#000000' },
+    { key: 'ferro',      name: 'Ferro C. Oeste', colour: '#046A38' },
   ],
 
-  // --- ISS --------------------------------------------------------------
+  // --- Formula 1 -----------------------------------------------------------
+  f1: {
+    driverId: 'colapinto',   // Ergast/Jolpica driver id
+    driverLabel: 'Colapinto',
+  },
+
+  // --- ISS -----------------------------------------------------------------
   iss: {
-    minElevationDeg: 15,   // ignore passes lower than this (hard to see)
-    alertWithinMinutes: 60, // show a "LOOK UP" alert when a pass is this soon
+    minElevationDeg: 25,     // below this it is not worth looking up for
+    alertWithinMinutes: 60,  // card inverts and shouts inside this window
     days: 5,
   },
 
-  // --- News / tips ticker ---------------------------------------------
-  news: {
-    rotateSeconds: 12,
-    hnMinPoints: 60,
-    // headlines whose title contains any of these are hidden (keeps it positive)
-    blocklist: ['dies', 'dead', 'lawsuit', 'sued', 'ban', 'bankrupt', 'layoff',
-      'layoffs', 'fired', 'hack', 'breach', 'scam', 'war', 'shooting', 'crash victims'],
+  // ==========================================================================
+  //  HOUSEHOLD  ← the bit you need to fill in
+  // ==========================================================================
+  household: {
+    // Bin collection. Set `day` to your collection weekday (0=Sun … 6=Sat),
+    // and `anchorDate` to any date you KNOW was a particular collection, with
+    // `anchorType` naming which bin went out that week. The alternating cycle
+    // is worked out from there. `weekly` bins go out every collection day.
+    bins: {
+      enabled: true,
+      day: 3,                       // 3 = Wednesday  ← CHECK THIS
+      anchorDate: '2026-09-09',     // a known collection date  ← CHECK THIS
+      anchorType: 'black',          // which bin went out that day ← CHECK THIS
+      alternating: [
+        { key: 'black', label: 'Black bin',  colour: '#3A3A3C' },
+        { key: 'blue',  label: 'Blue bin',   colour: '#0A84FF' },
+      ],
+      weekly: [
+        { key: 'food', label: 'Food waste', colour: '#30D158' },
+      ],
+      // how many hours before collection to start saying "out tonight"
+      remindHoursBefore: 18,
+    },
+
+    // School terms — add or edit ranges as you get the dates. Anything outside
+    // a range reads as "holiday". INSET days are shown by name.
+    school: {
+      enabled: true,
+      label: 'School',
+      terms: [
+        { name: 'Autumn 1', from: '2026-09-03', to: '2026-10-23' },
+        { name: 'Autumn 2', from: '2026-11-02', to: '2026-12-18' },
+      ],
+      insetDays: ['2026-09-01', '2026-09-02'],
+      // recurring reminders by weekday (0=Sun … 6=Sat)
+      notes: {
+        1: 'PE kit',
+        5: 'Swimming',
+      },
+    },
   },
 
-  // --- Look & feel -------------------------------------------------------
-  // "positive"  = grey-green LCD, dark digits (chosen)
-  // "negative"  = black LCD, light digits
-  // "auto"      = positive by day, negative between sunset and sunrise
-  lcdMode: 'positive',
-  nightDim: true,          // gently dim the whole panel late at night
-  nightDimFrom: '22:30',
-  nightDimTo: '06:30',
-  nightDimOpacity: 0.55,
-
-  // --- Refresh intervals (minutes) ------------------------------------
+  // --- Refresh intervals (minutes) -----------------------------------------
   refresh: {
-    weather: 15,
-    calendar: 10,
-    football: 360,
-    trains: 1,
-    iss: 180,
-    astro: 30,
-    news: 30,
+    weather: 15, calendar: 10, football: 180, trains: 1,
+    iss: 180, astro: 30, f1: 180, music: 360, house: 30,
   },
 
-  // --- Backend ---------------------------------------------------------
-  // Where the serverless proxies live. "/api" is redirected to the function
-  // by netlify.toml and gets proper edge caching. In pure static / demo mode
-  // the dashboard falls back to mock data for anything backend-dependent.
-  apiBase: '/api',
+  // --- Overnight behaviour -------------------------------------------------
+  night: {
+    faceFrom: '23:00',   // minimal amber night face starts
+    faceTo:   '06:30',   // full dashboard returns
+    // luminance ramp for the full dashboard: gain at noon vs after dark
+    gainDay: 1.0,
+    gainDusk: 0.55,
+    gainLate: 0.35,      // from 21:30 until the night face takes over
+  },
+
+  // --- Backend -------------------------------------------------------------
+  // On the deployed site this is same-origin. When previewing from a local
+  // static server there are no functions, so borrow the live ones.
+  apiBase: /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
+    ? 'https://timbero-wall-dashboard.netlify.app/api'
+    : '/api',
 };

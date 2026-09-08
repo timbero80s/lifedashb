@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { $, every, minutesSinceMidnight, tzParts } from './util.js';
+import { $, every, minutesSinceMidnight, tzParts, fmtTime } from './util.js';
 import { getCoords } from './location.js';
 import { initClock } from './widgets/clock.js';
 import { initWeather } from './widgets/weather.js';
@@ -8,63 +8,82 @@ import { initFootball } from './widgets/football.js';
 import { initTrains } from './widgets/trains.js';
 import { initISS } from './widgets/iss.js';
 import { initAstro } from './widgets/astro.js';
-import { initNews } from './widgets/news.js';
+import { initF1 } from './widgets/f1.js';
+import { initMusic } from './widgets/music.js';
+import { initHousehold } from './widgets/household.js';
 
-// ---- theme (positive / negative / auto) ---------------------------------
-function applyLcdMode(sun) {
-  let mode = CONFIG.lcdMode;
-  if (mode === 'auto' && sun && sun.sunrise && sun.sunset) {
-    const now = Date.now();
-    const night = now < sun.sunrise.getTime() || now > sun.sunset.getTime();
-    mode = night ? 'negative' : 'positive';
-  }
-  document.documentElement.dataset.lcd = mode === 'negative' ? 'negative' : 'positive';
+// ── fit the fixed 2000x1200 canvas to whatever the device reports ────────
+// The Fire's browser may report 2000 CSS px or 1000 at DPR 2. Scaling the
+// root explicitly makes the design deterministic either way, and `zoom`
+// relays out (crisp text) rather than rasterising like transform: scale.
+function fit() {
+  const s = Math.min(window.innerWidth / 2000, window.innerHeight / 1200);
+  const app = $('#app');
+  if ('zoom' in app.style) app.style.zoom = s;
+  else { app.style.transform = `scale(${s})`; app.style.transformOrigin = '0 0'; }
 }
 
-// ---- night dim ---------------------------------------------------------
-function applyNightDim() {
-  if (!CONFIG.nightDim) return;
+// ── overnight: luminance ramp, then a minimal night face ────────────────
+let nightHooks = { nextEvent: () => null };
+
+function nowMinutes() {
   const { hour, minute } = tzParts(new Date(), CONFIG.timezone);
-  const cur = hour * 60 + minute;
-  const from = minutesSinceMidnight(CONFIG.nightDimFrom);
-  const to = minutesSinceMidnight(CONFIG.nightDimTo);
-  const dim = from < to ? (cur >= from && cur < to) : (cur >= from || cur < to);
-  document.documentElement.style.setProperty('--dim', CONFIG.nightDimOpacity);
-  $('#lcd').classList.toggle('dim', dim);
+  return hour * 60 + minute;
 }
+const inWindow = (cur, from, to) => (from < to ? cur >= from && cur < to : cur >= from || cur < to);
 
-// ---- global data status light ---------------------------------------
-const status = { ok: 0, stale: 0, down: 0 };
-export function reportStatus(kind) {
-  status[kind] = (status[kind] || 0) + 1;
-  const dot = $('#net-status');
-  dot.classList.remove('ok', 'stale', 'down');
-  if (status.down > 0 && status.ok === 0) dot.classList.add('down');
-  else if (status.stale > 0) dot.classList.add('stale');
-  else dot.classList.add('ok');
+function applyNight() {
+  const cur = nowMinutes();
+  const from = minutesSinceMidnight(CONFIG.night.faceFrom);
+  const to = minutesSinceMidnight(CONFIG.night.faceTo);
+  const nightFace = inWindow(cur, from, to);
+
+  $('#nightface').hidden = !nightFace;
+  $('#app').hidden = nightFace;
+
+  if (nightFace) {
+    $('#nf-clock').textContent = fmtTime(new Date(), CONFIG.timezone);
+    const next = nightHooks.nextEvent();
+    $('#nf-next').textContent = next
+      ? `${fmtTime(new Date(next.start), CONFIG.timezone)}  ${next.summary}`
+      : '';
+    // nudge the layout a few px every 10 min so an IPS panel showing the same
+    // two lines for 7 hours doesn't retain the image
+    const drift = Math.floor(Date.now() / 600000) % 6;
+    $('#nightface').style.transform = `translate(${drift - 3}px, ${(drift % 3) - 1}px)`;
+    return;
+  }
+
+  // daytime luminance ramp — a mostly-white 11" panel at 21:00 is a lamp
+  const { gainDay, gainDusk, gainLate } = CONFIG.night;
+  let gain = gainDay;
+  if (cur >= minutesSinceMidnight('21:30')) gain = gainLate;
+  else if (cur >= minutesSinceMidnight('19:00')) gain = gainDusk;
+  else if (cur < minutesSinceMidnight('07:00')) gain = gainDusk;
+  document.documentElement.style.setProperty('--gain', gain.toFixed(2));
 }
 
 async function main() {
-  applyLcdMode();
-  applyNightDim();
-  every(5, applyNightDim);
+  fit();
+  window.addEventListener('resize', fit);
 
   initClock();
+  applyNight();
+  every(0.5, applyNight);
 
-  // location first (weather / astro / iss depend on it)
   let coords = null;
   try { coords = await getCoords(); } catch (e) { console.warn('geo failed', e); }
 
-  const astro = initAstro(coords);
-  initWeather(coords, (sun) => { applyLcdMode(sun); });
-  initCalendar();
-  initFootball();
+  initWeather(coords);
+  const cal = initCalendar();
+  nightHooks.nextEvent = cal.nextEvent;
+  initAstro(coords);
   initTrains();
+  initFootball();
+  initF1();
   initISS(coords);
-  initNews();
-
-  // re-apply auto theme every 10 min using astro's sun times
-  every(10, () => applyLcdMode(astro.getSun && astro.getSun()));
+  initMusic();
+  initHousehold();
 }
 
 main();

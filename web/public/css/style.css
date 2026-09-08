@@ -1,282 +1,315 @@
-/* ============================================================================
-   WALL DASHBOARD — Casio-LCD styling
-   Designed for Amazon Fire Max 11, landscape (2000 x 1200).
-   Layout is fluid so it also looks right on HD 10 / HD 8 and a desktop tab.
+/* ==========================================================================
+   Wall dashboard — WidgetKit-inspired dark UI
+   Authored at a fixed 2000 x 1200 canvas; app.js zooms the root to fit the
+   real viewport, so every value here is a TRUE pixel on the Fire Max 11
+   (11", 212 ppi, 1px = 0.12mm). Type is sized for a 1.5–3 m read.
+   Hard floor: nothing below 22px, ever.
    ========================================================================== */
 
-/* ---- 7-segment + LCD dot fonts (served from jsDelivr, graceful fallback) -- */
-@font-face {
-  font-family: 'DSEG7';
-  src: url('https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG7-Classic/DSEG7Classic-Bold.woff2') format('woff2');
-  font-display: swap;
-}
-@font-face {
-  font-family: 'DSEG14';
-  src: url('https://cdn.jsdelivr.net/npm/dseg@0.46.0/fonts/DSEG14-Classic/DSEG14Classic-Bold.woff2') format('woff2');
-  font-display: swap;
-}
-@import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700&family=Share+Tech+Mono&display=swap');
-
 :root {
-  /* positive LCD (default) */
-  --lcd-bg: #b9c3ac;
-  --lcd-bg-2: #aeb9a0;
-  --ink: #161c12;
-  --ink-soft: #3c4634;
-  --ink-faint: #7c856f;            /* "off" segment ghosting */
-  --accent: #1c1c1c;
-  --hi: #123f8c;                   /* subtle highlight (today, alerts) */
-  --case: #24271f;
-  --case-2: #313528;
-  --bezel-line: #4a4e3d;
-}
+  /* surfaces */
+  --bg-base:   #0E0F12;
+  --bg-card:   #1B1C20;
+  --bg-card-2: #26272C;
+  --separator: rgba(255,255,255,.09);
 
-:root[data-lcd='negative'] {
-  --lcd-bg: #12150f;
-  --lcd-bg-2: #171b12;
-  --ink: #d7e8c8;
-  --ink-soft: #9fb48c;
-  --ink-faint: #3b4632;
-  --accent: #e6f2d8;
-  --hi: #7fb0ff;
-  --case: #16180f;
-  --case-2: #1e2016;
-  --bezel-line: #2c3020;
+  /* ink */
+  --text-1: #FFFFFF;
+  --text-2: rgba(235,235,245,.62);
+  --text-3: rgba(235,235,245,.32);
+
+  /* Apple system tints, dark set. Semantic only — never decorative. */
+  --tint-blue:   #0A84FF;   /* the live pointer: today, to-London */
+  --tint-teal:   #40C8E0;   /* from-London */
+  --tint-green:  #30D158;   /* won / on time  (used sparingly) */
+  --tint-orange: #FF9F0A;   /* delayed / stale / needs attention */
+  --tint-red:    #FF453A;   /* cancelled / lost / broken */
+  --tint-purple: #BF5AF2;   /* F1 */
+  --tint-yellow: #FFD60A;
+
+  --warn: var(--tint-orange);
+  --bad:  var(--tint-red);
+  --ok:   var(--tint-green);
+
+  /* geometry */
+  --radius: 22px;
+  --pad: 24px;
+  --gutter: 20px;
+  --margin: 32px;
+
+  /* overnight luminance ramp, set by app.js */
+  --gain: 1;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html { font-size: clamp(9px, 1.15vw, 20px); }
+html { background: #000; }
 
 body {
-  font-family: 'Share Tech Mono', ui-monospace, Menlo, monospace;
-  background: #0c0d09;
-  color: var(--ink);
-  height: 100vh;
-  overflow: hidden;
+  font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv05' 1;
   -webkit-font-smoothing: antialiased;
+  background: var(--bg-base);
+  color: var(--text-1);
+  overflow: hidden;
   user-select: none;
 }
 
-/* ---- device / bezel ---------------------------------------------------- */
-.device {
-  height: 100vh;
-  width: 100vw;
-  padding: 1.6rem 1.6rem 1.1rem;
-  background:
-    radial-gradient(120% 80% at 50% 0%, var(--case-2), var(--case) 70%);
-  display: flex;
-  flex-direction: column;
-  gap: 0.7rem;
-}
-
-.brand {
-  display: flex;
-  align-items: baseline;
-  gap: 0.9rem;
-  padding: 0 0.4rem;
-  color: #c7cdb6;
-  letter-spacing: 0.14em;
-}
-.brand-mark { font-family: 'Oxanium', sans-serif; font-weight: 700; font-size: 1.05rem; }
-.brand-sub  { font-size: 0.7rem; color: #7d836c; letter-spacing: 0.3em; }
-.brand-status { margin-left: auto; font-size: 0.8rem; color: #6f7a5b; transition: color .4s; }
-.brand-status.ok   { color: #8bd07a; }
-.brand-status.stale{ color: #d8b45a; }
-.brand-status.down { color: #d0655a; }
-
-/* ---- LCD ------------------------------------------------------------- */
-.lcd {
-  flex: 1;
-  min-height: 0;
-  border-radius: 0.5rem;
-  padding: 0.9rem;
-  background:
-    repeating-linear-gradient(0deg, rgba(0,0,0,0.035) 0 2px, transparent 2px 4px),
-    linear-gradient(160deg, var(--lcd-bg), var(--lcd-bg-2));
-  box-shadow:
-    inset 0 0 0 2px var(--bezel-line),
-    inset 0 0 3.5rem rgba(0,0,0,0.28),
-    0 0.5rem 2rem rgba(0,0,0,0.5);
+#app {
+  width: 2000px;
+  height: 1200px;
+  padding: var(--margin);
+  background: var(--bg-base);
   display: grid;
-  gap: 0.75rem;
-  grid-template-columns: 3.4fr 5.2fr 3.4fr;
-  grid-template-rows: auto 1fr 1fr auto;
-  grid-template-areas:
-    "clock    clock     clock"
-    "weather  calendar  astro"
-    "football calendar  iss"
-    "news     news      news";
-  transition: opacity 1.2s ease;
-}
-.lcd.dim { opacity: var(--dim, 0.55); }
-
-/* alternate layout: give trains its own cell by splitting the right column */
-@media (min-aspect-ratio: 3/2) {
-  .lcd {
-    grid-template-rows: auto 1fr 1fr 1fr auto;
-    grid-template-areas:
-      "clock    clock     clock"
-      "weather  calendar  astro"
-      "football calendar  iss"
-      "football calendar  trains"
-      "news     news      news";
-  }
-}
-
-/* ---- panels -------------------------------------------------------- */
-.panel {
-  position: relative;
-  border: 1.5px solid var(--ink-soft);
-  border-radius: 0.3rem;
-  padding: 0.5rem 0.6rem;
-  background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.05));
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  /* minmax(0,1fr) — a bare 1fr is minmax(auto,1fr) and will grow past its
+     share when a card's content is tall, pushing the last row off-screen. */
+  grid-template-rows: 190px minmax(0, 1fr);
+  gap: var(--gutter);
+  filter: brightness(var(--gain));
+  transition: filter 20s linear;
   overflow: hidden;
 }
-.panel__label {
-  font-family: 'Oxanium', sans-serif;
-  font-weight: 700;
-  font-size: 0.72rem;
-  letter-spacing: 0.22em;
-  color: var(--ink-soft);
-  border-bottom: 1.5px dashed var(--ink-faint);
-  padding-bottom: 0.25rem;
-  margin-bottom: 0.4rem;
-  flex: 0 0 auto;
+
+/* ── hero strip ─────────────────────────────────────────────────────── */
+.hero {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 40px;
+  padding: 0 8px;
+}
+.hero__clock {
+  font-size: 128px; font-weight: 700; letter-spacing: -.03em; line-height: 1;
+}
+.hero__date {
+  font-size: 34px; font-weight: 500; color: var(--text-2); margin-top: 10px;
+}
+.hero__right { text-align: right; }
+.hero__temp { font-size: 96px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
+.hero__cond { font-size: 30px; font-weight: 500; color: var(--text-2); margin-top: 6px; }
+.hero__place {
+  font-size: 24px; font-weight: 600; letter-spacing: .04em;
+  color: var(--text-3); margin-top: 4px;
+}
+.dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--text-3); margin-left: 8px; vertical-align: middle;
+}
+.dot.ok    { background: var(--ok); }
+.dot.stale { background: var(--warn); }
+.dot.down  { background: var(--bad); }
+
+/* the alert lane — empty almost always, and that is the point */
+.hero__alert {
+  justify-self: center;
+  background: var(--tint-blue);
+  color: #fff;
+  border-radius: 18px;
+  padding: 14px 32px;
+  font-size: 44px; font-weight: 700;
+  display: flex; align-items: baseline; gap: 18px;
+}
+.hero__alert .a-sub { font-size: 28px; font-weight: 600; opacity: .85; }
+.hero__alert[data-level='warn'] { background: var(--warn); color: #1B1200; }
+.hero__alert[data-level='bad']  { background: var(--bad); }
+
+/* ── body grid ─────────────────────────────────────────────────────── */
+.body {
+  display: grid;
+  gap: var(--gutter);
+  min-height: 0;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+  /* Area = importance. Trains is the biggest card because it is the only one
+     attached to an action someone is about to take. */
+  grid-template-areas:
+    "cal cal cal cal tr  tr  tr  wx  wx  wx  as  as "
+    "cal cal cal cal tr  tr  tr  wx  wx  wx  as  as "
+    "cal cal cal cal tr  tr  tr  wx  wx  wx  as  as "
+    "hh  hh  hh  hh  tr  tr  tr  fb  fb  fb  iss iss"
+    "hh  hh  hh  hh  f1  f1  f1  fb  fb  fb  iss iss"
+    "mus mus mus mus f1  f1  f1  fb  fb  fb  iss iss";
+}
+
+/* ── cards: no borders, no shadows. Separation by luminance only. ──── */
+.card {
+  position: relative;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  padding: var(--pad);
+  overflow: hidden;
+  display: flex; flex-direction: column; gap: 12px;
+  min-height: 0;
+}
+.card__label {
+  font-size: 24px; font-weight: 600; letter-spacing: .04em;
+  color: var(--text-3); flex: 0 0 auto;
+}
+.card__body { flex: 1; min-height: 0; overflow: hidden; }
+
+/* stale marker: a bar inside the radius, never a border */
+.card.is-stale::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: var(--warn);
+}
+/* the one card allowed to invert */
+.card.is-alert { background: var(--tint-blue); }
+.card.is-alert .card__label { color: rgba(255,255,255,.7); }
+
+.rows { display: flex; flex-direction: column; }
+.row { display: flex; align-items: baseline; gap: 14px; padding: 9px 0; }
+.row + .row { border-top: 1px solid var(--separator); }
+.muted { color: var(--text-2); }
+.faint { color: var(--text-3); }
+.dim   { opacity: .4; }
+.grow  { flex: 1; min-width: 0; }
+.trunc { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.empty { font-size: 30px; color: var(--text-3); }
+
+/* ── calendar ─────────────────────────────────────────────────────── */
+.cal-head { font-size: 24px; font-weight: 600; color: var(--text-3); letter-spacing: .04em; margin: 2px 0 4px; }
+.cal-ev { display: flex; gap: 14px; align-items: baseline; padding: 7px 0 7px 12px; position: relative; }
+.cal-ev + .cal-ev { border-top: 1px solid var(--separator); }
+.cal-ev .t { font-size: 30px; color: var(--text-2); flex: 0 0 auto; width: 92px; }
+.cal-ev .s { font-size: 34px; font-weight: 500; }
+.cal-ev.now::before {
+  content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 4px; border-radius: 2px; background: var(--tint-blue);
+}
+.cal-ev.past { opacity: .4; }
+.cal-more { font-size: 26px; color: var(--text-3); padding-left: 12px; }
+.cal-strip { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-top: auto; padding-top: 14px; }
+.cal-strip .d { text-align: center; }
+.cal-strip .dl {
+  font-size: 24px; font-weight: 600; color: var(--text-3);
+  width: 34px; height: 34px; line-height: 34px; border-radius: 50%; margin: 0 auto 6px;
+}
+.cal-strip .d.today .dl { background: var(--tint-blue); color: #fff; }
+.cal-strip .dots { display: flex; gap: 4px; justify-content: center; height: 10px; }
+.cal-strip .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-2); }
+
+/* ── trains ───────────────────────────────────────────────────────── */
+.tr-sec + .tr-sec { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--separator); }
+.tr-head { display: flex; align-items: baseline; gap: 12px; font-size: 24px; font-weight: 600; color: var(--text-3); letter-spacing: .03em; margin-bottom: 4px; }
+.tr-head .arrow { color: var(--tint-blue); }
+.tr-sec.from .tr-head .arrow { color: var(--tint-teal); }
+.tr-row { display: flex; align-items: baseline; gap: 14px; padding: 8px 0; }
+.tr-row + .tr-row { border-top: 1px solid var(--separator); }
+.tr-row .t { font-size: 44px; font-weight: 600; flex: 0 0 auto; }
+.tr-row .t.struck { font-size: 30px; color: var(--text-3); text-decoration: line-through; font-weight: 500; }
+.tr-row .exp { font-size: 44px; font-weight: 700; color: var(--warn); }
+.tr-row .dest { font-size: 26px; color: var(--text-2); }
+.tr-row .plat {
+  margin-left: auto; flex: 0 0 auto;
+  font-size: 22px; font-weight: 600; color: var(--text-2);
+  background: var(--bg-card-2); border-radius: 8px; padding: 4px 10px;
+}
+.tr-row.cancelled { color: var(--bad); }
+.tr-row.cancelled .t { text-decoration: line-through; color: var(--bad); }
+.tr-row.cancelled .dest { color: var(--bad); }
+
+/* ── weather outlook ──────────────────────────────────────────────── */
+.wx-meta { font-size: 26px; color: var(--text-2); margin-bottom: 6px; }
+.wx-day { display: flex; align-items: center; gap: 14px; padding: 11px 0; font-size: 30px; }
+.wx-day + .wx-day { border-top: 1px solid var(--separator); }
+.wx-day .d { width: 74px; color: var(--text-2); flex: 0 0 auto; }
+.wx-day .ic { width: 34px; flex: 0 0 auto; }
+.wx-day .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--bg-card-2); position: relative; }
+.wx-day .bar i {
+  position: absolute; top: 0; bottom: 0; border-radius: 3px;
+  background: linear-gradient(90deg, var(--tint-blue), var(--tint-orange));
+}
+.wx-day .t { flex: 0 0 auto; font-weight: 500; }
+
+/* ── sun & moon ───────────────────────────────────────────────────── */
+.moon-wrap { display: flex; align-items: center; gap: 18px; margin-bottom: 6px; }
+.moon {
+  width: 88px; height: 88px; border-radius: 50%; flex: 0 0 auto;
+  background: #C9CCD4; position: relative; overflow: hidden;
+}
+.moon i { position: absolute; inset: 0; border-radius: 50%; background: var(--bg-card); }
+.moon-txt .nm { font-size: 26px; font-weight: 600; line-height: 1.2; }
+.moon-txt .pc { font-size: 24px; color: var(--text-2); }
+.astro-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; font-size: 30px; }
+.astro-row + .astro-row { border-top: 1px solid var(--separator); }
+.astro-row .k { color: var(--text-2); font-size: 26px; }
+
+/* ── household ────────────────────────────────────────────────────── */
+.hh-main { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.hh-bin {
+  font-size: 56px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05;
   white-space: nowrap;
 }
-.panel__body { flex: 1; min-height: 0; overflow: hidden; font-size: 0.95rem; }
-.loading { color: var(--ink-faint); font-size: 0.85rem; letter-spacing: 0.1em; }
-
-#p-clock     { grid-area: clock; }
-#p-weather   { grid-area: weather; }
-#p-calendar  { grid-area: calendar; }
-#p-astro     { grid-area: astro; }
-#p-football  { grid-area: football; }
-#p-iss       { grid-area: iss; }
-#p-trains    { grid-area: trains; }
-#p-news      { grid-area: news; }
-
-/* ---- clock strip -------------------------------------------------- */
-.panel--clock {
-  flex-direction: row;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.35rem 0.9rem;
+.hh-also { font-size: 28px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.hh-bin .swatch, .hh-also .swatch {
+  display: inline-block; width: 22px; height: 22px; border-radius: 6px;
+  margin-right: 12px; vertical-align: baseline;
 }
-.clock-left { display: flex; flex-direction: column; gap: 0.15rem; min-width: 12rem; }
-.dow { display: flex; gap: 0.35rem; font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.12em; }
-.dow span { color: var(--ink-faint); }
-.dow span.on { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
-.date-line { font-size: 1.5rem; letter-spacing: 0.06em; }
-.sub-line { font-size: 0.7rem; color: var(--ink-soft); letter-spacing: 0.16em; }
+.hh-also .swatch { width: 16px; height: 16px; margin-right: 8px; }
+.hh-when { font-size: 30px; color: var(--text-2); }
+.hh-when.due { color: var(--warn); font-weight: 700; }
+.hh-row { display: flex; gap: 14px; align-items: baseline; padding: 10px 0; font-size: 30px; }
+.hh-row + .hh-row { border-top: 1px solid var(--separator); }
+.hh-row .k { font-size: 24px; font-weight: 600; color: var(--text-3); letter-spacing: .03em; width: 108px; flex: 0 0 auto; }
+.hh-row .v { color: var(--text-1); }
+.hh-row .v.alert { color: var(--warn); }
 
-.clock-main { flex: 1; text-align: center; line-height: 1; }
-.time-big {
-  font-family: 'DSEG7', 'Share Tech Mono', monospace;
-  font-size: 4.6rem;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.18);
+/* ── football ─────────────────────────────────────────────────────── */
+#football-body { display: flex; flex-direction: column; justify-content: space-between; }
+.fb-club { padding: 10px 0 10px 14px; position: relative; }
+.fb-club + .fb-club { border-top: 1px solid var(--separator); }
+.fb-club .bar { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--text-3); }
+.fb-top { display: flex; align-items: baseline; gap: 12px; }
+.fb-top .nm { font-size: 30px; font-weight: 600; }
+.fb-top .pos { margin-left: auto; font-size: 40px; font-weight: 700; }
+.fb-top .pts { font-size: 24px; color: var(--text-2); }
+.fb-sub { font-size: 24px; color: var(--text-2); margin-top: 3px; }
+.fb-sub .w { color: var(--ok); }
+.fb-sub .l { color: var(--bad); }
+
+/* ── F1 ───────────────────────────────────────────────────────────── */
+.f1-race .nm { font-size: 36px; font-weight: 600; line-height: 1.1; }
+.f1-race .loc { font-size: 24px; color: var(--text-2); margin-top: 4px; }
+.f1-foot {
+  margin-top: auto; padding-top: 14px; border-top: 1px solid var(--separator);
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
 }
-.time-big::before {          /* faint "88:88" ghost segments */
-  content: none;
+.f1-count { font-size: 38px; font-weight: 700; line-height: 1.1; }
+.f1-count.soon { color: var(--tint-purple); }
+.f1-driver { display: flex; align-items: baseline; gap: 12px; }
+.f1-driver .p { font-size: 56px; font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+.f1-driver .who { font-size: 22px; color: var(--text-2); }
+.f1-driver .pts { font-size: 26px; font-weight: 600; }
+
+/* ── ISS ──────────────────────────────────────────────────────────── */
+.iss-when { font-size: 60px; font-weight: 700; letter-spacing: -.02em; line-height: 1.05; }
+.iss-row { display: flex; justify-content: space-between; font-size: 28px; padding: 9px 0; }
+.iss-row + .iss-row { border-top: 1px solid var(--separator); }
+.iss-row .k { color: var(--text-2); font-size: 26px; }
+.iss-count { margin-top: auto; font-size: 34px; font-weight: 600; color: var(--text-2); }
+.card.is-alert .iss-when,
+.card.is-alert .iss-count { color: #fff; }
+.card.is-alert .iss-row,
+.card.is-alert .iss-row .k { color: rgba(255,255,255,.85); border-color: rgba(255,255,255,.2); }
+.iss-lookup { font-size: 96px; font-weight: 700; letter-spacing: -.03em; }
+
+/* ── music (short card — tighter padding, smaller label) ──────────── */
+#c-mus { padding: 12px 24px; gap: 2px; }
+#c-mus .card__label { font-size: 22px; }
+.mus-row { display: flex; gap: 14px; align-items: baseline; padding: 4px 0; }
+.mus-row + .mus-row { border-top: 1px solid var(--separator); }
+.mus-row .yr { font-size: 26px; font-weight: 700; color: var(--text-3); width: 62px; flex: 0 0 auto; }
+.mus-row .ti { font-size: 28px; font-weight: 500; }
+.mus-row .ar { font-size: 26px; color: var(--text-2); }
+
+/* ── night face ───────────────────────────────────────────────────── */
+#nightface {
+  position: fixed; inset: 0; background: #000; z-index: 50;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 24px; color: #FF9500;
 }
-.time-sec {
-  font-family: 'DSEG7', 'Share Tech Mono', monospace;
-  font-size: 1.9rem;
-  vertical-align: top;
-  margin-left: 0.35rem;
-  color: var(--ink-soft);
-}
-.clock-right { text-align: right; min-width: 9rem; }
-.now-temp { font-family: 'DSEG7', 'Share Tech Mono', monospace; font-size: 2.6rem; }
-.now-place { font-family: 'Oxanium', sans-serif; font-weight: 600; letter-spacing: 0.18em; font-size: 0.8rem; }
-.now-cond { font-size: 0.8rem; color: var(--ink-soft); letter-spacing: 0.08em; }
+.nf__clock { font-size: 140px; font-weight: 300; letter-spacing: -.02em; opacity: .5; }
+.nf__next  { font-size: 30px; font-weight: 500; opacity: .32; text-align: center; }
 
-/* ---- weather ----------------------------------------------------- */
-.wx-now { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.25rem; }
-.wx-now .big { font-family: 'DSEG7','Share Tech Mono',monospace; font-size: 1.7rem; }
-.wx-now .meta { font-size: 0.72rem; color: var(--ink-soft); line-height: 1.3; }
-.wx-days { display: flex; flex-direction: column; gap: 0.12rem; }
-.wx-day { display: grid; grid-template-columns: 2.4rem 1.5rem 1fr auto; gap: 0.35rem; align-items: center; font-size: 0.76rem; }
-.wx-day .d { color: var(--ink-soft); letter-spacing: 0.1em; }
-.wx-day .ic { font-size: 1rem; }
-.wx-day .bar { height: 4px; background: var(--ink-faint); border-radius: 2px; position: relative; }
-.wx-day .bar i { position: absolute; top: 0; bottom: 0; background: var(--ink); border-radius: 2px; }
-.wx-day .t { font-variant-numeric: tabular-nums; }
-
-/* ---- calendar --------------------------------------------------- */
-.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.25rem; height: 100%; }
-.cal-col { border: 1px solid var(--ink-faint); border-radius: 0.2rem; padding: 0.25rem; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
-.cal-col.today { border-color: var(--ink); background: rgba(0,0,0,0.06); }
-.cal-col h4 { font-family: 'Oxanium', sans-serif; font-size: 0.68rem; letter-spacing: 0.1em; color: var(--ink-soft); display: flex; justify-content: space-between; margin-bottom: 0.2rem; }
-.cal-col.today h4 { color: var(--ink); }
-.cal-ev { font-size: 0.66rem; line-height: 1.15; margin-bottom: 0.2rem; padding-left: 0.35rem; border-left: 2px solid var(--ink-soft); overflow: hidden; }
-.cal-ev .tm { color: var(--ink-soft); }
-.cal-ev.allday { border-left-style: dotted; }
-.cal-more { font-size: 0.62rem; color: var(--ink-faint); }
-.cal-empty { font-size: 0.62rem; color: var(--ink-faint); }
-
-/* ---- astro ----------------------------------------------------- */
-.astro-moon { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
-.moon-disc { width: 3rem; height: 3rem; border-radius: 50%; background: var(--ink-faint);
-  box-shadow: inset 0 0 0 1.5px var(--ink-soft); position: relative; overflow: hidden; flex: 0 0 auto; }
-.moon-disc i { position: absolute; inset: 0; background: var(--ink); }
-.astro-moon .txt .name { font-size: 0.95rem; }
-.astro-moon .txt .pct { font-size: 0.75rem; color: var(--ink-soft); }
-.astro-row { display: flex; justify-content: space-between; font-size: 0.86rem; padding: 0.15rem 0; border-bottom: 1px dashed var(--ink-faint); }
-.astro-row b { font-weight: 400; font-family: 'DSEG7','Share Tech Mono',monospace; }
-
-/* ---- football ------------------------------------------------- */
-.fb-club { border-bottom: 1.5px dashed var(--ink-faint); padding: 0.35rem 0; }
-.fb-club:last-child { border-bottom: 0; }
-.fb-head { display: flex; align-items: baseline; gap: 0.5rem; }
-.fb-head .nm { font-family: 'Oxanium', sans-serif; font-weight: 700; letter-spacing: 0.06em; font-size: 0.85rem; }
-.fb-head .pos { margin-left: auto; font-family: 'DSEG7','Share Tech Mono',monospace; font-size: 1rem; }
-.fb-head .pos small { font-family: 'Share Tech Mono'; font-size: 0.6rem; color: var(--ink-soft); }
-.fb-line { font-size: 0.74rem; color: var(--ink-soft); margin-top: 0.15rem; }
-.fb-line .res-W { color: var(--ink); }
-.fb-next { font-size: 0.78rem; margin-top: 0.12rem; }
-.fb-next .vs { color: var(--ink-soft); }
-.fb-na { font-size: 0.72rem; color: var(--ink-faint); }
-
-/* ---- ISS ----------------------------------------------------- */
-.iss-wrap { display: flex; flex-direction: column; gap: 0.3rem; height: 100%; }
-.iss-alert { background: var(--ink); color: var(--lcd-bg); text-align: center; font-family: 'Oxanium',sans-serif; font-weight: 700; letter-spacing: 0.2em; padding: 0.2rem; border-radius: 0.2rem; }
-.iss-bigline { display: flex; align-items: baseline; gap: 0.4rem; }
-.iss-day { font-family: 'Oxanium', sans-serif; font-weight: 700; letter-spacing: 0.1em; font-size: 0.9rem; color: var(--ink-soft); }
-.iss-big { font-family: 'DSEG7','Share Tech Mono',monospace; font-size: 1.8rem; }
-.iss-meta { font-size: 0.8rem; color: var(--ink-soft); line-height: 1.5; }
-.iss-track { flex: 1; position: relative; border: 1px solid var(--ink-faint); border-radius: 0.2rem; margin-top: 0.2rem; min-height: 2.2rem; overflow: hidden; }
-.iss-track .sky { position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 12%, rgba(0,0,0,0.05) 12% 12.5%); }
-.iss-dot { position: absolute; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--ink); top: 50%; transform: translateY(-50%); }
-.iss-list { font-size: 0.7rem; color: var(--ink-faint); }
-
-/* ---- trains ------------------------------------------------- */
-.tr-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; height: 100%; }
-.tr-col h5 { font-family: 'Oxanium', sans-serif; font-size: 0.7rem; letter-spacing: 0.12em; color: var(--ink-soft); display: flex; align-items: center; gap: 0.3rem; margin-bottom: 0.25rem; }
-.tr-row { display: grid; grid-template-columns: 3.1rem 1fr 2.4rem; gap: 0.3rem; font-size: 0.78rem; padding: 0.14rem 0; border-bottom: 1px dashed var(--ink-faint); align-items: baseline; }
-.tr-row .t { font-family: 'DSEG7','Share Tech Mono',monospace; font-size: 0.8rem; }
-.tr-row .dest { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.tr-row .st { text-align: right; font-size: 0.66rem; }
-.tr-row .st.late { color: var(--hi); }
-.tr-row .st.ontime { color: var(--ink-soft); }
-.tr-anim { position: relative; height: 0.9rem; overflow: hidden; margin-top: 0.2rem; }
-.tr-anim .glyph { position: absolute; top: 0; font-size: 0.8rem; animation: trainmove 9s linear infinite; }
-.tr-anim.rev .glyph { animation-direction: reverse; }
-@keyframes trainmove { from { left: -2rem; } to { left: 100%; } }
-
-/* ---- ticker ------------------------------------------------- */
-.panel--ticker { flex-direction: row; align-items: center; gap: 0.7rem; padding: 0.4rem 0.7rem; }
-.ticker-tag { font-family: 'Oxanium', sans-serif; font-weight: 700; letter-spacing: 0.16em; font-size: 0.72rem;
-  border: 1.5px solid var(--ink-soft); border-radius: 0.2rem; padding: 0.15rem 0.4rem; flex: 0 0 auto; }
-.ticker-view { flex: 1; overflow: hidden; white-space: nowrap; }
-.ticker-item { display: inline-block; font-size: 0.92rem; transition: opacity .4s; }
-.ticker-item.swap { opacity: 0; }
-
-/* ---- misc -------------------------------------------------- */
-.stale-dot::after { content: ' \25CB'; color: var(--ink-faint); font-size: 0.7rem; }
 [hidden] { display: none !important; }

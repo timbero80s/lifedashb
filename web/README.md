@@ -15,8 +15,19 @@ site for automatic deploys.
 
 ---
 
-A Casio-LCD-style wall dashboard for an **Amazon Fire Max 11** (landscape). One
-web page, no app store. It shows:
+## Fill this in: bin day
+
+`web/public/js/config.js` → `household.bins`. Set `day` to your collection
+weekday (0 = Sunday … 6 = Saturday), `anchorDate` to any date you know was a
+collection, and `anchorType` to which of the alternating bins went out that day.
+The cycle is worked out from there — no API, nothing to go stale. School term
+dates and weekday reminders live in the same block.
+
+---
+
+A wall dashboard for an **Amazon Fire Max 11** (landscape), designed as
+non-interactive iOS-style widget cards on a dark ground. One web page, no app
+store. It shows:
 
 - Date, day-of-week, week number, big 7-segment clock
 - Weather for your postcode (now + 5-day), from the UK Met Office model via Open-Meteo

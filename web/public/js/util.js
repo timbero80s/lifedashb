@@ -9,7 +9,6 @@ export function el(tag, attrs = {}, ...children) {
     if (k === 'class') node.className = v;
     else if (k === 'text') node.textContent = v;
     else if (k === 'html') node.innerHTML = v;
-    else if (k.startsWith('on') && typeof v === 'function') node.addEventListener(k.slice(2), v);
     else if (v != null) node.setAttribute(k, v);
   }
   for (const c of children.flat()) {
@@ -19,59 +18,50 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
-// fetch JSON with a timeout and a friendly error
-export async function fetchJSON(url, opts = {}, timeoutMs = 12000) {
+export async function fetchJSON(url, opts = {}, timeoutMs = 15000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(url, { ...opts, signal: ctrl.signal });
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     return await res.json();
-  } finally {
-    clearTimeout(t);
-  }
+  } finally { clearTimeout(t); }
 }
 
-// localStorage-backed cache so the wall keeps showing the last good data
-// even when the network hiccups.
+// localStorage-backed cache so the wall keeps showing the last good data.
 export const cache = {
   get(key) {
     try {
       const raw = localStorage.getItem('wd:' + key);
-      if (!raw) return null;
-      return JSON.parse(raw);
+      return raw ? JSON.parse(raw) : null;
     } catch { return null; }
   },
   set(key, value) {
-    try {
-      localStorage.setItem('wd:' + key, JSON.stringify({ t: Date.now(), value }));
-    } catch { /* private mode / quota — ignore */ }
+    try { localStorage.setItem('wd:' + key, JSON.stringify({ t: Date.now(), value })); }
+    catch { /* private mode / quota */ }
   },
 };
 
-// Run loader(), cache the result. On failure fall back to cached value and
-// mark it stale. Returns { value, stale, ageMs }.
+// Run loader(); on failure fall back to the cached value and mark it stale.
 export async function withCache(key, loader) {
   try {
     const value = await loader();
     cache.set(key, value);
-    return { value, stale: false, ageMs: 0 };
+    return { value, stale: false };
   } catch (err) {
     const hit = cache.get(key);
-    if (hit) return { value: hit.value, stale: true, ageMs: Date.now() - hit.t, error: err };
-    return { value: null, stale: true, ageMs: Infinity, error: err };
+    if (hit) return { value: hit.value, stale: true, error: err };
+    return { value: null, stale: true, error: err };
   }
 }
 
-// schedule a repeating task; runs immediately, then every `minutes`.
 export function every(minutes, fn) {
   const run = () => Promise.resolve(fn()).catch((e) => console.warn('task failed', e));
   run();
-  return setInterval(run, Math.max(1, minutes) * 60_000);
+  return setInterval(run, Math.max(0.25, minutes) * 60_000);
 }
 
-// ---- date / time formatting (always in the configured timezone) ----------
-
+// ── time, always in the configured timezone ────────────────────────────
 export function tzParts(date, timezone) {
   const dtf = new Intl.DateTimeFormat('en-GB', {
     timeZone: timezone, hour12: false,
@@ -82,41 +72,45 @@ export function tzParts(date, timezone) {
   return {
     year: +p.year, month: +p.month, day: +p.day,
     hour: +p.hour % 24, minute: +p.minute, second: +p.second,
-    weekday: p.weekday.toUpperCase(),
+    weekday: p.weekday,
   };
 }
 
-export function fmtTime(date, timezone, opts = {}) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone, hour12: false, hour: '2-digit', minute: '2-digit', ...opts,
-  }).format(date);
+export const fmtTime = (date, tz) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour12: false, hour: '2-digit', minute: '2-digit' }).format(date);
+
+export const fmtDay = (date, tz, opts = { weekday: 'short' }) =>
+  new Intl.DateTimeFormat('en-GB', { timeZone: tz, ...opts }).format(date);
+
+// "in 4d 02h" / "in 3h 12m" / "in 14 min" / "now"
+export function countdown(target, now = Date.now()) {
+  let s = Math.round((new Date(target).getTime() - now) / 1000);
+  if (s <= 0) return 'now';
+  const d = Math.floor(s / 86400); s -= d * 86400;
+  const h = Math.floor(s / 3600);  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  if (d) return `in ${d}d ${String(h).padStart(2, '0')}h`;
+  if (h) return `in ${h}h ${String(m).padStart(2, '0')}m`;
+  return `in ${m} min`;
 }
 
-export function fmtClockRelative(date, timezone) {
-  const now = Date.now();
-  const diffMin = Math.round((date.getTime() - now) / 60000);
-  if (diffMin <= 0 && diffMin > -2) return 'now';
-  if (diffMin > 0 && diffMin < 60) return `in ${diffMin}m`;
-  if (diffMin >= 60 && diffMin < 60 * 24) {
-    const h = Math.floor(diffMin / 60), m = diffMin % 60;
-    return `in ${h}h${m ? ' ' + m + 'm' : ''}`;
-  }
-  return fmtTime(date, timezone, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+// local-midnight-anchored day key in a timezone, for comparing calendar days
+export function dayKey(date, tz) {
+  const p = tzParts(date, tz);
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`;
 }
 
-export function isoWeek(date, timezone) {
-  const { year, month, day } = tzParts(date, timezone);
+export function isoWeek(date, tz) {
+  const { year, month, day } = tzParts(date, tz);
   const d = new Date(Date.UTC(year, month - 1, day));
-  const dayNum = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - dayNum + 3);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7) + 3);
   const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  const diff = d - firstThursday;
-  return 1 + Math.round(diff / (7 * 864e5));
+  return 1 + Math.round((d - firstThursday) / (7 * 864e5));
 }
 
-export function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
-
-export function minutesSinceMidnight(hhmm) {
+export const minutesSinceMidnight = (hhmm) => {
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
-}
+};
+
+export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));

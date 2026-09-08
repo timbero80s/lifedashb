@@ -20,7 +20,7 @@ const headers = (seconds) => ({
 });
 
 // how long the CDN may cache each service's response
-const TTL = { calendar: 300, football: 1800, trains: 45, iss: 3600 };
+const TTL = { calendar: 300, football: 1800, trains: 45, iss: 3600, f1: 3600, music: 21600 };
 
 // a response we don't want cached for long because upstream probably choked
 function isThin(service, data) {
@@ -29,6 +29,8 @@ function isThin(service, data) {
     return !data.clubs || !data.clubs.some((c) => c.position || c.nextMatch || c.lastMatch);
   }
   if (service === 'iss') return !data.passes || data.passes.length === 0;
+  if (service === 'f1') return !data.race;
+  if (service === 'music') return !(data.onThisDay || []).length && !(data.newReleases || []).length;
   if (service === 'calendar') return false; // an empty week is legitimately empty
   return false;
 }
@@ -42,6 +44,8 @@ exports.handler = async (event) => {
       case 'football': data = await football(); break;
       case 'trains':   data = await trains(); break;
       case 'iss':      data = await iss(event.queryStringParameters || {}); break;
+      case 'f1':       data = await f1(); break;
+      case 'music':    data = await music(); break;
       default:
         return { statusCode: 400, headers: headers(60), body: JSON.stringify({ error: 'unknown service' }) };
     }
@@ -537,4 +541,108 @@ async function iss(q) {
     duration: (new Date(p.end) - new Date(p.start)) / 1000,
   }));
   return { passes, source: 'g7vrd' };
+}
+
+// ===========================================================================
+//  FORMULA 1  (Jolpica — the drop-in successor to the retired Ergast API)
+// ===========================================================================
+const F1_BASE = 'https://api.jolpi.ca/ergast/f1';
+const F1_DRIVER = process.env.F1_DRIVER_ID || 'colapinto';
+
+async function f1() {
+  const [nextRaw, standRaw] = await Promise.all([
+    j(`${F1_BASE}/current/next.json`),
+    j(`${F1_BASE}/current/driverstandings.json`),
+  ]);
+
+  const r = ((nextRaw.MRData.RaceTable || {}).Races || [])[0];
+  const race = r ? {
+    name: r.raceName,
+    round: +r.round,
+    circuit: r.Circuit.circuitName,
+    locality: r.Circuit.Location && r.Circuit.Location.locality,
+    country: r.Circuit.Location && r.Circuit.Location.country,
+    start: `${r.date}T${r.time || '13:00:00Z'}`,
+    qualifying: r.Qualifying ? `${r.Qualifying.date}T${r.Qualifying.time || '14:00:00Z'}` : null,
+    sprint: r.Sprint ? `${r.Sprint.date}T${r.Sprint.time || '14:00:00Z'}` : null,
+  } : null;
+
+  let driver = null;
+  const lists = (standRaw.MRData.StandingsTable || {}).StandingsLists || [];
+  if (lists.length) {
+    const row = (lists[0].DriverStandings || [])
+      .find((e) => (e.Driver.driverId || '').toLowerCase().includes(F1_DRIVER));
+    if (row) {
+      driver = {
+        position: +row.position,
+        points: +row.points,
+        wins: +row.wins,
+        team: (row.Constructors && row.Constructors[0] && row.Constructors[0].name || '').replace(/ F1 Team$/, ''),
+      };
+    }
+  }
+  return { race, driver };
+}
+
+// ===========================================================================
+//  MUSIC  (Wikidata — sitelink count is a decent proxy for "notable")
+//  Binding the dates with VALUES turns a full scan into indexed lookups:
+//  ~0.5s instead of ~13s, which is the difference between working and not.
+// ===========================================================================
+const WD = 'https://query.wikidata.org/sparql';
+const WD_HEADERS = {
+  Accept: 'application/sparql-results+json',
+  'User-Agent': 'WallDashboard/1.0 (personal wall display)',
+};
+
+async function sparql(query) {
+  const r = await fetch(`${WD}?query=${encodeURIComponent(query)}`, { headers: WD_HEADERS });
+  if (!r.ok) throw new Error(`wikidata -> ${r.status}`);
+  const d = await r.json();
+  return d.results.bindings;
+}
+
+const iso = (d) => d.toISOString().slice(0, 10);
+
+function albumQuery(dateValues, extraFilter, order) {
+  return `SELECT ?albumLabel ?artistLabel ?date ?sitelinks WHERE {
+  VALUES ?date { ${dateValues} }
+  ?album wdt:P31 wd:Q482994 ; wdt:P577 ?date ; wdt:P175 ?artist ; wikibase:sitelinks ?sitelinks .
+  ${extraFilter}
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,en-gb" }
+} ORDER BY ${order} LIMIT 8`;
+}
+
+async function music() {
+  const now = new Date();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(now.getUTCDate()).padStart(2, '0');
+  const thisYear = now.getUTCFullYear();
+
+  // same calendar day, every year back to 1958
+  const anniversary = [];
+  for (let y = 1958; y < thisYear; y++) anniversary.push(`"${y}-${mm}-${dd}"^^xsd:dateTime`);
+
+  // the last 35 days, for "out recently"
+  const recent = [];
+  for (let n = 0; n <= 35; n++) {
+    recent.push(`"${iso(new Date(now.getTime() - n * 864e5))}"^^xsd:dateTime`);
+  }
+
+  const [hist, neu] = await Promise.all([
+    sparql(albumQuery(anniversary.join(' '), 'FILTER(?sitelinks > 14)', 'DESC(?sitelinks)')).catch(() => []),
+    sparql(albumQuery(recent.join(' '), '', 'DESC(?sitelinks)')).catch(() => []),
+  ]);
+
+  const map = (b) => ({
+    title: b.albumLabel.value,
+    artist: b.artistLabel.value,
+    date: b.date.value.slice(0, 10),
+    year: +b.date.value.slice(0, 4),
+  });
+
+  return {
+    onThisDay: hist.map(map).filter((x) => !/^Q\d+$/.test(x.artist)),
+    newReleases: neu.map(map).filter((x) => !/^Q\d+$/.test(x.artist)),
+  };
 }

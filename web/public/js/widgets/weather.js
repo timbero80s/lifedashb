@@ -1,86 +1,106 @@
 import { CONFIG } from '../config.js';
-import { $, el, fetchJSON, withCache, every } from '../util.js';
-import { reportStatus } from '../app.js';
+import { $, el, fetchJSON, withCache, every, fmtDay } from '../util.js';
+import { reportStatus } from '../bus.js';
 
-// WMO weather-code -> [emoji, short text]
-const WMO = {
-  0: ['☀', 'CLEAR'], 1: ['\u{1F324}', 'SUNNY'], 2: ['⛅', 'PART CLOUD'], 3: ['☁', 'OVERCAST'],
-  45: ['\u{1F32B}', 'FOG'], 48: ['\u{1F32B}', 'RIME FOG'],
-  51: ['\u{1F327}', 'DRIZZLE'], 53: ['\u{1F327}', 'DRIZZLE'], 55: ['\u{1F327}', 'DRIZZLE'],
-  56: ['\u{1F327}', 'FRZ DRIZZLE'], 57: ['\u{1F327}', 'FRZ DRIZZLE'],
-  61: ['\u{1F327}', 'LIGHT RAIN'], 63: ['\u{1F327}', 'RAIN'], 65: ['\u{1F327}', 'HEAVY RAIN'],
-  66: ['\u{1F327}', 'FRZ RAIN'], 67: ['\u{1F327}', 'FRZ RAIN'],
-  71: ['\u{1F328}', 'LIGHT SNOW'], 73: ['\u{1F328}', 'SNOW'], 75: ['\u{1F328}', 'HEAVY SNOW'], 77: ['\u{1F328}', 'SNOW GRAINS'],
-  80: ['\u{1F326}', 'SHOWERS'], 81: ['\u{1F326}', 'SHOWERS'], 82: ['⛈', 'HEAVY SHWRS'],
-  85: ['\u{1F328}', 'SNOW SHWRS'], 86: ['\u{1F328}', 'SNOW SHWRS'],
-  95: ['⛈', 'THUNDER'], 96: ['⛈', 'THUNDER+HAIL'], 99: ['⛈', 'THUNDER+HAIL'],
+// Monochrome SVG glyphs — colour emoji at 30px are muddy and render
+// inconsistently across the Fire's font stack.
+const G = {
+  sun:   '<circle cx="12" cy="12" r="5"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1v3M12 20v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1 12h3M20 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></g>',
+  cloud: '<path d="M7 18h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 11a3.5 3.5 0 0 0 1 7z"/>',
+  part:  '<circle cx="8" cy="8" r="3.4"/><path d="M9 19h9a3.6 3.6 0 0 0 .3-7.2A5.4 5.4 0 0 0 8 12.4 3.2 3.2 0 0 0 9 19z"/>',
+  rain:  '<path d="M7 15h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 8a3.5 3.5 0 0 0 1 7z"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 18l-1 3M13 18l-1 3M18 18l-1 3"/></g>',
+  snow:  '<path d="M7 15h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 8a3.5 3.5 0 0 0 1 7z"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 19h.01M13 19h.01M18 19h.01M10.5 21.5h.01M15.5 21.5h.01"/></g>',
+  storm: '<path d="M7 15h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 8a3.5 3.5 0 0 0 1 7z"/><path d="M13 16l-3 4h3l-1 4 4-5h-3z"/>',
+  fog:   '<path d="M7 13h10a4 4 0 0 0 .4-8A6 6 0 0 0 6 6a3.5 3.5 0 0 0 1 7z"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 17h16M6 21h12"/></g>',
 };
-const codeInfo = (c) => WMO[c] || ['•', ''];
-const DAYNAMES = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const WMO = {
+  0: ['sun', 'Clear'], 1: ['sun', 'Sunny'], 2: ['part', 'Part cloud'], 3: ['cloud', 'Overcast'],
+  45: ['fog', 'Fog'], 48: ['fog', 'Rime fog'],
+  51: ['rain', 'Drizzle'], 53: ['rain', 'Drizzle'], 55: ['rain', 'Drizzle'],
+  56: ['rain', 'Frz drizzle'], 57: ['rain', 'Frz drizzle'],
+  61: ['rain', 'Light rain'], 63: ['rain', 'Rain'], 65: ['rain', 'Heavy rain'],
+  66: ['rain', 'Frz rain'], 67: ['rain', 'Frz rain'],
+  71: ['snow', 'Light snow'], 73: ['snow', 'Snow'], 75: ['snow', 'Heavy snow'], 77: ['snow', 'Snow grains'],
+  80: ['rain', 'Showers'], 81: ['rain', 'Showers'], 82: ['rain', 'Heavy showers'],
+  85: ['snow', 'Snow showers'], 86: ['snow', 'Snow showers'],
+  95: ['storm', 'Thunder'], 96: ['storm', 'Thunder'], 99: ['storm', 'Thunder'],
+};
+const info = (c) => WMO[c] || ['cloud', ''];
+const icon = (k) => `<svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor">${G[k]}</svg>`;
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+const compass = (d) => DIRS[Math.round(((d % 360) / 45)) % 8];
 
-function url(coords) {
+function url(c) {
   const p = new URLSearchParams({
-    latitude: coords.lat, longitude: coords.lon,
-    timezone: CONFIG.timezone,
-    current: 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,relative_humidity_2m,is_day',
-    hourly: 'temperature_2m,precipitation_probability,weather_code',
-    daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
-    wind_speed_unit: 'mph', temperature_unit: 'celsius', precipitation_unit: 'mm',
+    latitude: c.lat, longitude: c.lon, timezone: CONFIG.timezone,
+    current: 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m,relative_humidity_2m',
+    hourly: 'precipitation_probability,weather_code',
+    daily: 'weather_code,temperature_2m_max,temperature_2m_min',
+    wind_speed_unit: 'mph', temperature_unit: 'celsius',
     forecast_days: 5, models: 'ukmo_seamless',
   });
   return `https://api.open-meteo.com/v1/forecast?${p}`;
 }
 
-export function initWeather(coords, onSun) {
+// The one line of forecast that changes behaviour: when will it rain today.
+function rainWindow(w) {
+  const t = w.hourly && w.hourly.time, p = w.hourly && w.hourly.precipitation_probability;
+  if (!t || !p) return null;
+  const now = Date.now();
+  let start = null, end = null;
+  for (let i = 0; i < t.length && i < 24; i++) {
+    const at = new Date(t[i]).getTime();
+    if (at < now - 36e5 || at > now + 12 * 36e5) continue;
+    if (p[i] >= 50) { if (start === null) start = t[i]; end = t[i]; }
+    else if (start !== null) break;
+  }
+  if (start === null) return null;
+  const hh = (s) => s.slice(11, 16);
+  return start === end ? `Rain ~${hh(start)}` : `Rain ${hh(start)}–${hh(end)}`;
+}
+
+export function initWeather(coords) {
   const body = $('#weather-body');
-  if (!coords) { body.innerHTML = '<div class="loading">no location</div>'; return; }
+  const card = $('#c-wx');
+  if (!coords) { body.innerHTML = '<div class="empty">No location</div>'; return; }
 
   async function load() {
     const { value, stale } = await withCache('weather', () => fetchJSON(url(coords)));
-    if (!value) { reportStatus('down'); body.innerHTML = '<div class="loading">weather offline</div>'; return; }
-    reportStatus(stale ? 'stale' : 'ok');
-    render(value, stale);
-    if (onSun && value.daily && value.daily.sunrise) {
-      onSun({ sunrise: new Date(value.daily.sunrise[0]), sunset: new Date(value.daily.sunset[0]) });
-    }
+    if (!value) { reportStatus('weather', 'down'); return; }
+    reportStatus('weather', stale ? 'stale' : 'ok');
+    card.classList.toggle('is-stale', stale);
+    render(value);
   }
 
-  function render(w, stale) {
-    body.innerHTML = '';
+  function render(w) {
     const c = w.current;
-    const [ic, txt] = codeInfo(c.weather_code);
+    const [k, txt] = info(c.weather_code);
 
-    // update the top strip too
+    // hero strip
     $('#now-temp').textContent = `${Math.round(c.temperature_2m)}°`;
+    $('#now-cond').textContent = txt;
     $('#now-place').textContent = coords.label || CONFIG.placeLabel;
-    $('#now-cond').textContent = `${ic} ${txt}`;
 
-    const now = el('div', { class: 'wx-now' },
-      el('span', { class: 'big', text: `${Math.round(c.temperature_2m)}°` }),
-      el('span', { class: 'meta', html:
-        `feels ${Math.round(c.apparent_temperature)}°<br>` +
-        `wind ${Math.round(c.wind_speed_10m)}mph &middot; hum ${Math.round(c.relative_humidity_2m)}%` }),
-    );
-    body.append(now);
+    body.innerHTML = '';
+    const rain = rainWindow(w);
+    body.append(el('div', { class: 'wx-meta', text:
+      `Feels ${Math.round(c.apparent_temperature)}° · ${Math.round(c.wind_speed_10m)} mph ${compass(c.wind_direction_10m)}`
+      + (rain ? ` · ${rain}` : '') }));
 
     const d = w.daily;
-    const maxes = d.temperature_2m_max, mins = d.temperature_2m_min;
-    const lo = Math.min(...mins), hi = Math.max(...maxes), span = Math.max(1, hi - lo);
-    const days = el('div', { class: 'wx-days' });
+    const lo = Math.min(...d.temperature_2m_min), hi = Math.max(...d.temperature_2m_max);
+    const span = Math.max(1, hi - lo);
     for (let i = 0; i < Math.min(4, d.time.length); i++) {
-      const dt = new Date(d.time[i] + 'T12:00:00');
-      const [dic] = codeInfo(d.weather_code[i]);
-      const left = ((mins[i] - lo) / span) * 100;
-      const width = ((maxes[i] - mins[i]) / span) * 100;
-      days.append(el('div', { class: 'wx-day' },
-        el('span', { class: 'd', text: i === 0 ? 'TDY' : DAYNAMES[dt.getDay()] }),
-        el('span', { class: 'ic', text: dic }),
+      const [dk] = info(d.weather_code[i]);
+      const left = ((d.temperature_2m_min[i] - lo) / span) * 100;
+      const width = Math.max(6, ((d.temperature_2m_max[i] - d.temperature_2m_min[i]) / span) * 100);
+      body.append(el('div', { class: 'wx-day' },
+        el('span', { class: 'd', text: i === 0 ? 'Today' : fmtDay(new Date(d.time[i] + 'T12:00:00'), CONFIG.timezone) }),
+        el('span', { class: 'ic', html: icon(dk) }),
         el('span', { class: 'bar' }, el('i', { style: `left:${left}%;width:${width}%` })),
-        el('span', { class: 't', text: `${Math.round(mins[i])}°/${Math.round(maxes[i])}°` }),
+        el('span', { class: 't', text: `${Math.round(d.temperature_2m_min[i])}°–${Math.round(d.temperature_2m_max[i])}°` }),
       ));
     }
-    body.append(days);
-    if (stale) body.firstChild.classList.add('stale-dot');
   }
 
   every(CONFIG.refresh.weather, load);
