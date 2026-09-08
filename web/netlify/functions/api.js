@@ -453,16 +453,16 @@ async function iss(q) {
     } catch (e) { console.warn('n2yo failed, trying fallback', e.message); }
   }
 
-  // keyless fallback
+  // keyless fallback (g7vrd) — looks ~48h ahead
   const r = await j(`https://api.g7vrd.co.uk/v1/satellite-passes/25544/${lat}/${lon}.json?minimum_visible_time_s=120`);
   const passes = (r.passes || []).map((p) => ({
-    start: p.rise ? p.rise.utc_datetime : p.start,
-    max: p.culmination ? p.culmination.utc_datetime : p.tca,
-    end: p.set ? p.set.utc_datetime : p.end,
-    maxEl: (p.culmination && p.culmination.elevation) || p.max_elevation || 0,
-    startAz: (p.rise && p.rise.azimuth) || 0,
-    endAz: (p.set && p.set.azimuth) || 0,
-    duration: p.duration_seconds || p.duration || 0,
+    start: p.start,
+    max: p.tca,
+    end: p.end,
+    maxEl: p.max_elevation || 0,
+    startAz: p.aos_azimuth || 0,
+    endAz: p.los_azimuth || 0,
+    duration: (new Date(p.end) - new Date(p.start)) / 1000,
   }));
   return { passes, source: 'g7vrd' };
 }

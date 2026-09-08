@@ -1,6 +1,8 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
+  # static site — nothing to compile
+  command = "echo 'no build step'"
 
 # pretty URL: /api?service=weather  ->  the function
 [[redirects]]
