@@ -1,5 +1,20 @@
 # Wall Dashboard
 
+**Live:** https://timbero-wall-dashboard.netlify.app
+(Netlify site `timbero-wall-dashboard`, deployed 2026-09-08.)
+
+**Still to do:** add `RTT_USERNAME` + `RTT_PASSWORD` in Netlify for the trains
+widget — sign up at https://api.rtt.io/ → Account → *Create API auth credential*,
+then Netlify → Site configuration → Environment variables → add both → Deploys →
+Trigger deploy. Everything else is live.
+
+To redeploy after editing files in `web/`: from the `web/` directory run
+`npx -y @netlify/mcp@latest --site-id bbd13bb4-48d1-447b-8e2f-49a779b47c87`
+(it will prompt you to sign in to Netlify), or connect the GitHub repo to the
+site for automatic deploys.
+
+---
+
 A Casio-LCD-style wall dashboard for an **Amazon Fire Max 11** (landscape). One
 web page, no app store. It shows:
 
@@ -143,13 +158,15 @@ After editing, redeploy (Option A: drop the folder again; Option B: `git push`).
 ## Known limits (free data sources)
 
 - **Tottenham**: full data (table, form, last & next fixture) via football-data.org.
-- **Maidenhead United** (National League) & **Ferro Carril Oeste** (Primera
-  Nacional): league position and last result come from thesportsdb's free tier
-  when its season data is populated; **next fixture** often needs their paid key.
-  The panel degrades gracefully and tells you what's missing. The
-  `sportsDbLeagueId` values in `config.js` are best guesses — if a table shows
-  "n/a", the backend also tries the league id from the club's own record, so it
-  usually recovers.
+- **Ferro Carril Oeste** (Primera Nacional): league position **and** last/next
+  fixture both come through on thesportsdb's free tier.
+- **Maidenhead United** (National League): last/next fixture come through, but
+  **league position shows "table n/a"** — thesportsdb's free tier only returns
+  the top 5 of a table and files Maidenhead under the wrong division. A paid
+  thesportsdb key (`SPORTSDB_KEY`) would fix this.
+- thesportsdb's shared free key is rate-limited, so the backend caches a good
+  response at Netlify's edge for 30 min and the tablet keeps the best data it
+  has seen — a momentary upstream failure never blanks the panel.
 - **Trains**: matched by destination/origin containing "Paddington", which
   covers GWR and most Elizabeth line services to/from London. Realtime Trains
   free tier is for personal use.
