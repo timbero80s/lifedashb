@@ -22,6 +22,17 @@ const headers = (seconds) => ({
 // how long the CDN may cache each service's response
 const TTL = { calendar: 300, football: 1800, trains: 45, iss: 3600 };
 
+// a response we don't want cached for long because upstream probably choked
+function isThin(service, data) {
+  if (!data) return true;
+  if (service === 'football') {
+    return !data.clubs || !data.clubs.some((c) => c.position || c.nextMatch || c.lastMatch);
+  }
+  if (service === 'iss') return !data.passes || data.passes.length === 0;
+  if (service === 'calendar') return false; // an empty week is legitimately empty
+  return false;
+}
+
 exports.handler = async (event) => {
   const service = (event.queryStringParameters || {}).service || '';
   try {
@@ -34,7 +45,9 @@ exports.handler = async (event) => {
       default:
         return { statusCode: 400, headers: headers(60), body: JSON.stringify({ error: 'unknown service' }) };
     }
-    return { statusCode: 200, headers: headers(TTL[service] || 60), body: JSON.stringify(data) };
+    // never let the edge cache a thin/empty result for long — retry soon instead
+    const ttl = isThin(service, data) ? 15 : (TTL[service] || 60);
+    return { statusCode: 200, headers: headers(ttl), body: JSON.stringify(data) };
   } catch (err) {
     console.error(service, err);
     return {
