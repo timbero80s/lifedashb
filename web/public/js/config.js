@@ -63,21 +63,41 @@ export const CONFIG = {
       ],
     },
 
-    // School terms — add or edit ranges as you get the dates. Anything outside
-    // a range reads as "holiday". INSET days are shown by name.
+    // School calendar. Terms and holidays are named ranges; `closures` are
+    // single days inside a term when the school is shut to students.
     school: {
       enabled: true,
       label: 'School',
+      // Sir William Borlase's Grammar School, 2026/27 — taken from
+      // https://www.swbgs.com/term-dates
       terms: [
-        { name: 'Autumn 1', from: '2026-09-03', to: '2026-10-23' },
+        { name: 'Autumn 1', from: '2026-09-04', to: '2026-10-16' },
         { name: 'Autumn 2', from: '2026-11-02', to: '2026-12-18' },
+        { name: 'Spring 1', from: '2027-01-05', to: '2027-02-12' },
+        { name: 'Spring 2', from: '2027-02-22', to: '2027-03-25' },
+        { name: 'Summer 1', from: '2027-04-12', to: '2027-05-28' },
+        { name: 'Summer 2', from: '2027-06-07', to: '2027-07-16' },
       ],
-      insetDays: ['2026-09-01', '2026-09-02'],
-      // recurring reminders by weekday (0=Sun … 6=Sat)
-      notes: {
-        1: 'PE kit',
-        5: 'Swimming',
-      },
+      holidays: [
+        { name: 'Half-term',         from: '2026-10-17', to: '2026-11-01' },
+        { name: 'Christmas holiday', from: '2026-12-19', to: '2027-01-03' },
+        { name: 'Half-term',         from: '2027-02-13', to: '2027-02-21' },
+        { name: 'Easter holiday',    from: '2027-03-26', to: '2027-04-11' },
+        { name: 'Half-term',         from: '2027-05-29', to: '2027-06-06' },
+        { name: 'Summer holiday',    from: '2027-07-17', to: '2027-09-01' },
+      ],
+      // days inside a term when the school is shut to students
+      closures: [
+        { date: '2026-09-01', label: 'INSET day' },
+        { date: '2026-09-02', label: 'INSET day' },
+        { date: '2026-10-19', label: 'INSET day' },
+        { date: '2027-01-04', label: 'INSET day' },
+        { date: '2027-05-03', label: 'Bank holiday' },
+        { date: '2027-06-28', label: 'INSET day' },
+      ],
+      // Recurring weekday reminders, e.g. { 1: 'PE kit' } for Mondays.
+      // Empty until you tell me what actually needs remembering.
+      notes: {},
     },
   },
 

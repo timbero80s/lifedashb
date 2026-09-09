@@ -36,16 +36,35 @@ export function initHousehold() {
   const body = $('#house-body');
   const cfg = CONFIG.household;
 
+  // Priority: is the school shut today? then which term? then which holiday,
+  // and when is everyone back.
+  function shortDate(key) {
+    return new Date(localMidnight(key)).toLocaleDateString('en-GB',
+      { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
   function schoolLine(now) {
     const s = cfg.school;
     if (!s || !s.enabled) return null;
     const key = dayKey(now, CONFIG.timezone);
-    if ((s.insetDays || []).includes(key)) return { v: 'INSET day — no school', alert: true };
+
     const term = (s.terms || []).find((t) => key >= t.from && key <= t.to);
-    if (!term) return { v: 'Holiday' };
-    const dow = new Date(localMidnight(key)).getUTCDay();
-    const note = (s.notes || {})[dow];
-    return { v: term.name + (note ? ` · ${note}` : '') };
+    if (term) {
+      // a closure only matters on a day school would otherwise be on
+      const shut = (s.closures || []).find((c) => c.date === key);
+      if (shut) return { v: `${shut.label} — no school`, alert: true };
+      const note = (s.notes || {})[new Date(localMidnight(key)).getUTCDay()];
+      const daysLeft = Math.round((localMidnight(term.to) - localMidnight(key)) / 864e5);
+      const tail = note ? ` · ${note}`
+        : daysLeft <= 7 ? ` · breaks ${shortDate(term.to)}`
+        : '';
+      return { v: term.name + tail };
+    }
+
+    const hol = (s.holidays || []).find((h) => key >= h.from && key <= h.to);
+    const next = (s.terms || []).filter((t) => t.from > key).sort((a, b) => a.from < b.from ? -1 : 1)[0];
+    const back = next ? ` · back ${shortDate(next.from)}` : '';
+    return { v: (hol ? hol.name : 'Holiday') + back };
   }
 
   function render() {
