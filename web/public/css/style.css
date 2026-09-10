@@ -257,6 +257,12 @@ body {
 .hh-row + .hh-row { border-top: 1px solid var(--separator); }
 .hh-row .k { font-size: 21px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; width: 92px; flex: 0 0 auto; }
 .hh-row .v { color: var(--text-1); }
+.hh-week {
+  flex: 0 0 auto;
+  font-size: 20px; font-weight: 700; letter-spacing: .06em;
+  background: var(--bg-card-2); color: var(--text-1);
+  border-radius: 7px; padding: 3px 9px;
+}
 .hh-row .v.alert { color: var(--warn); }
 
 /* ── football ─────────────────────────────────────────────────────── */

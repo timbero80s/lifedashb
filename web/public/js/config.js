@@ -98,6 +98,19 @@ export const CONFIG = {
         { date: '2027-05-03', label: 'Bank holiday' },
         { date: '2027-06-28', label: 'INSET day' },
       ],
+      // Two-week timetable cycle. Anchored on a week the user confirmed:
+      // w/c Monday 7 Sep 2026 was Week B.
+      // `pauseOverHolidays`: a two-week cycle normally resumes where it left
+      // off rather than alternating through the holidays. Set false if the
+      // school actually counts calendar weeks. (The two only disagree after
+      // a holiday of an odd number of weeks — first one is Feb half-term.)
+      cycle: {
+        enabled: true,
+        anchorMonday: '2026-09-07',
+        anchorWeek: 'B',
+        pauseOverHolidays: true,
+      },
+
       // Weekday reminders (0=Sun … 6=Sat). From Teo's Year 9 timetable:
       // Games is period 5 Tuesday on the Field, and PE is in the Sports Hall
       // on Friday — in BOTH Week A and Week B, so kit days don't depend on

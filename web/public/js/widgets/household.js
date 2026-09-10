@@ -43,6 +43,34 @@ export function initHousehold() {
       { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   }
 
+  // Which half of the two-week timetable are we in? Counts school weeks, not
+  // calendar weeks, so a holiday doesn't advance the cycle.
+  const addDays = (key, n) => {
+    const d = new Date(localMidnight(key) + n * 864e5);
+    return d.toISOString().slice(0, 10);
+  };
+  const mondayOf = (key) => {
+    const dow = new Date(localMidnight(key)).getUTCDay();   // 0 Sun … 6 Sat
+    return addDays(key, -((dow + 6) % 7));
+  };
+
+  function weekLabel(key) {
+    const s = cfg.school, c = s && s.cycle;
+    if (!c || !c.enabled) return null;
+    const cur = mondayOf(key);
+    const anchor = mondayOf(c.anchorMonday);
+    const isTermWeek = (mon) => (s.terms || []).some((t) => addDays(mon, 4) >= t.from && mon <= t.to);
+
+    let steps = 0, m = anchor;
+    const dir = cur > anchor ? 7 : -7;
+    for (let i = 0; i < 400 && m !== cur; i++) {
+      m = addDays(m, dir);
+      if (!c.pauseOverHolidays || isTermWeek(m)) steps++;
+    }
+    const other = c.anchorWeek === 'A' ? 'B' : 'A';
+    return steps % 2 === 0 ? c.anchorWeek : other;
+  }
+
   function schoolLine(now) {
     const s = cfg.school;
     if (!s || !s.enabled) return null;
@@ -52,13 +80,13 @@ export function initHousehold() {
     if (term) {
       // a closure only matters on a day school would otherwise be on
       const shut = (s.closures || []).find((c) => c.date === key);
-      if (shut) return { v: `${shut.label} — no school`, alert: true };
+      if (shut) return { week: weekLabel(key), v: `${shut.label} — no school`, alert: true };
       const note = (s.notes || {})[new Date(localMidnight(key)).getUTCDay()];
       const daysLeft = Math.round((localMidnight(term.to) - localMidnight(key)) / 864e5);
       const tail = note ? ` · ${note}`
         : daysLeft <= 7 ? ` · breaks ${shortDate(term.to)}`
         : '';
-      return { v: term.name + tail };
+      return { week: weekLabel(key), v: term.name + tail };
     }
 
     const hol = (s.holidays || []).find((h) => key >= h.from && key <= h.to);
@@ -106,9 +134,11 @@ export function initHousehold() {
 
     const school = schoolLine(now);
     if (school) {
-      body.append(el('div', { class: 'hh-row' },
-        el('span', { class: 'k', text: (cfg.school.label || 'School').toUpperCase() }),
-        el('span', { class: 'v grow trunc' + (school.alert ? ' alert' : ''), text: school.v })));
+      const row = el('div', { class: 'hh-row' },
+        el('span', { class: 'k', text: (cfg.school.label || 'School').toUpperCase() }));
+      if (school.week) row.append(el('span', { class: 'hh-week', text: 'WK ' + school.week }));
+      row.append(el('span', { class: 'v grow trunc' + (school.alert ? ' alert' : ''), text: school.v }));
+      body.append(row);
     }
   }
 
