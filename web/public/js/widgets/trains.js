@@ -61,6 +61,10 @@ export function initTrains() {
 
   function render(d) {
     body.innerHTML = '';
+    if (d.note && !(d.toLondon || []).length && !(d.fromLondon || []).length) {
+      body.append(el('div', { class: 'empty', text: d.note }));
+      return;
+    }
     body.append(section('Paddington', '→', d.toLondon, 'to'));
     body.append(section('from Paddington', '←', d.fromLondon, 'from'));
   }

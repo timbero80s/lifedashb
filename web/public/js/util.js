@@ -114,3 +114,17 @@ export const minutesSinceMidnight = (hhmm) => {
 };
 
 export const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+// Make a whole card tappable. The wall tablet has a touchscreen, so a card is
+// a big, forgiving target. Opens in a new tab so the dashboard itself is never
+// navigated away from.
+export function linkCard(cardSel, url) {
+  const card = $(cardSel);
+  if (!card || !url) return;
+  let a = card.querySelector('.card__link');
+  if (!a) {
+    a = el('a', { class: 'card__link', target: '_blank', rel: 'noopener noreferrer' });
+    card.append(a, el('span', { class: 'card__go', text: '↗' }));
+  }
+  a.href = url;
+}

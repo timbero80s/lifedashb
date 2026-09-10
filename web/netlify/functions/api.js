@@ -20,7 +20,9 @@ const headers = (seconds) => ({
 });
 
 // how long the CDN may cache each service's response
-const TTL = { calendar: 300, football: 1800, trains: 45, iss: 3600, f1: 3600, music: 21600 };
+// RTT's free tier allows 10 req/min and 100 req/hour. Two location calls per
+// origin hit at a 150s edge TTL is ~48/hour, comfortably inside it.
+const TTL = { calendar: 300, football: 1800, trains: 150, iss: 3600, f1: 3600, music: 21600 };
 
 // a response we don't want cached for long because upstream probably choked
 function isThin(service, data) {
@@ -492,10 +494,19 @@ async function trains() {
   if (!access) return { toLondon: [], fromLondon: [], note: 'RTT_TOKEN not set' };
   const headers = { Authorization: `Bearer ${access}` };
 
-  const [toRaw, fromRaw] = await Promise.all([
-    j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterTo=gb-nr:${LONDON}&timeWindow=150`, { headers }),
-    j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterFrom=gb-nr:${LONDON}&timeWindow=150`, { headers }),
-  ]);
+  let toRaw, fromRaw;
+  try {
+    [toRaw, fromRaw] = await Promise.all([
+      j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterTo=gb-nr:${LONDON}&timeWindow=150`, { headers }, 0),
+      j(`${RTT_BASE}/rtt/location?code=gb-nr:${STATION}&filterFrom=gb-nr:${LONDON}&timeWindow=150`, { headers }, 0),
+    ]);
+  } catch (e) {
+    if (/-> 429$/.test(e.message)) {
+      // over quota: say so plainly and let the edge retry shortly
+      return { toLondon: [], fromLondon: [], station: STATION, note: 'Rate limited' };
+    }
+    throw e;
+  }
 
   const clean = (arr) => arr.filter(Boolean)
     .filter((x) => new Date(x.expected).getTime() > Date.now() - 5 * 60000)
@@ -605,9 +616,12 @@ async function sparql(query) {
 const iso = (d) => d.toISOString().slice(0, 10);
 
 function albumQuery(dateValues, extraFilter, order) {
-  return `SELECT ?albumLabel ?artistLabel ?date ?sitelinks WHERE {
+  // P436 is the MusicBrainz release-group id, which is the key into the
+  // Cover Art Archive — that's where the sleeve images come from.
+  return `SELECT ?albumLabel ?artistLabel ?date ?sitelinks ?mbid WHERE {
   VALUES ?date { ${dateValues} }
   ?album wdt:P31 wd:Q482994 ; wdt:P577 ?date ; wdt:P175 ?artist ; wikibase:sitelinks ?sitelinks .
+  OPTIONAL { ?album wdt:P436 ?mbid }
   ${extraFilter}
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,mul,en-gb" }
 } ORDER BY ${order} LIMIT 8`;
@@ -634,12 +648,16 @@ async function music() {
     sparql(albumQuery(recent.join(' '), '', 'DESC(?sitelinks)')).catch(() => []),
   ]);
 
-  const map = (b) => ({
-    title: b.albumLabel.value,
-    artist: b.artistLabel.value,
-    date: b.date.value.slice(0, 10),
-    year: +b.date.value.slice(0, 4),
-  });
+  const map = (b) => {
+    const mbid = b.mbid && b.mbid.value;
+    return {
+      title: b.albumLabel.value,
+      artist: b.artistLabel.value,
+      date: b.date.value.slice(0, 10),
+      year: +b.date.value.slice(0, 4),
+      art: mbid ? `https://coverartarchive.org/release-group/${mbid}/front-250` : null,
+    };
+  };
 
   return {
     onThisDay: hist.map(map).filter((x) => !/^Q\d+$/.test(x.artist)),

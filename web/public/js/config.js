@@ -31,6 +31,9 @@ export const CONFIG = {
   f1: {
     driverId: 'colapinto',   // Ergast/Jolpica driver id
     driverLabel: 'Colapinto',
+    // helmet graphic — Alpine blue with an Argentine-sky stripe
+    helmet: { shell: '#0093CC', stripe: '#9FD9F6', visor: '#101216' },
+    link: 'https://www.formula1.com/en/results/2026/drivers',
   },
 
   // --- ISS -----------------------------------------------------------------
@@ -103,7 +106,7 @@ export const CONFIG = {
 
   // --- Refresh intervals (minutes) -----------------------------------------
   refresh: {
-    weather: 15, calendar: 10, football: 180, trains: 1,
+    weather: 15, calendar: 10, football: 180, trains: 2.5,
     iss: 180, astro: 30, f1: 180, music: 360, house: 30,
   },
 

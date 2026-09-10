@@ -2,8 +2,12 @@ import { CONFIG } from '../config.js';
 import { $, el, fetchJSON, withCache, every } from '../util.js';
 import { reportStatus } from '../bus.js';
 
-// Two halves in a short card: one notable album released on today's date in
-// history, and one notable album out in the last few weeks.
+// Two halves: one notable album released on today's date in history, and one
+// notable album out recently. Sleeve art comes from the Cover Art Archive,
+// keyed by the MusicBrainz id the backend gets from Wikidata.
+const spotify = (item) =>
+  `https://open.spotify.com/search/${encodeURIComponent(`${item.artist} ${item.title}`)}`;
+
 export function initMusic() {
   const body = $('#music-body');
   const card = $('#c-mus');
@@ -22,24 +26,39 @@ export function initMusic() {
     render();
   }
 
+  function art(item) {
+    if (item.art) {
+      const img = el('img', { class: 'mus-art', src: item.art, alt: '', loading: 'lazy' });
+      // a missing sleeve must never show a broken-image glyph on a wall
+      img.addEventListener('error', () => img.replaceWith(fallback(item)), { once: true });
+      return img;
+    }
+    return fallback(item);
+  }
+  const fallback = (item) =>
+    el('div', { class: 'mus-art mus-art--fallback', text: (item.artist || '?').trim()[0].toUpperCase() });
+
   function row(tag, item) {
-    return el('div', { class: 'mus-row' },
-      el('span', { class: 'yr', text: tag }),
-      el('span', { class: 'grow trunc' },
-        el('span', { class: 'ti', text: item.title }),
-        el('span', { class: 'ar', text: ' — ' + item.artist }),
+    return el('a', { class: 'mus-row', href: spotify(item), target: '_blank', rel: 'noopener noreferrer' },
+      art(item),
+      el('div', { class: 'mus-meta grow' },
+        el('div', { class: 'mus-tag', text: tag }),
+        el('div', { class: 'mus-ti trunc', text: item.title }),
+        el('div', { class: 'mus-ar trunc', text: item.artist }),
       ));
   }
 
   // Both lists are longer than the two slots, so step through them slowly.
-  // One swap every few minutes is not a ticker; it is a card that stays
-  // interesting for a week.
+  // One swap every few minutes is not a ticker.
   function render() {
     if (!data) return;
     body.innerHTML = '';
     const hist = data.onThisDay || [], neu = data.newReleases || [];
-    if (hist.length) body.append(row(String(hist[tick % hist.length].year), hist[tick % hist.length]));
-    if (neu.length) body.append(row('New', neu[tick % neu.length]));
+    if (hist.length) {
+      const it = hist[tick % hist.length];
+      body.append(row(`ON THIS DAY · ${it.year}`, it));
+    }
+    if (neu.length) body.append(row('NEW RELEASE', neu[tick % neu.length]));
     if (!hist.length && !neu.length) body.append(el('div', { class: 'empty', text: '—' }));
   }
 
