@@ -169,24 +169,25 @@ body {
 .grow  { flex: 1; min-width: 0; }
 .trunc { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .empty { font-size: 30px; color: var(--text-3); }
+#calendar-body .empty { font-size: 22px; }
 
 /* ── calendar ─────────────────────────────────────────────────────── */
-.cal-head { font-size: 22px; font-weight: 700; color: var(--text-2); letter-spacing: .05em; text-transform: uppercase; margin: 2px 0 3px; }
-.cal-ev { display: flex; gap: 12px; align-items: baseline; padding: 4px 0 4px 12px; position: relative; }
+.cal-head { font-size: 20px; font-weight: 700; color: var(--text-2); letter-spacing: .05em; text-transform: uppercase; margin: 0 0 1px; }
+.cal-ev { display: flex; gap: 12px; align-items: baseline; padding: 2px 0 2px 12px; position: relative; line-height: 1.15; }
 .cal-ev + .cal-ev { border-top: 1px solid var(--separator); }
-.cal-ev .t { font-size: 25px; color: var(--text-2); flex: 0 0 auto; width: 78px; }
-.cal-ev .s { font-size: 27px; font-weight: 500; }
+.cal-ev .t { font-size: 23px; color: var(--text-2); flex: 0 0 auto; width: 72px; }
+.cal-ev .s { font-size: 24px; font-weight: 500; }
 .cal-ev.now::before {
   content: ''; position: absolute; left: 0; top: 6px; bottom: 6px;
   width: 4px; border-radius: 2px; background: var(--tint-blue);
 }
 .cal-ev.past { opacity: .4; }
-.cal-more { font-size: 22px; color: var(--text-3); padding-left: 12px; }
-.cal-strip { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-top: auto; padding-top: 10px; }
+.cal-more { font-size: 21px; color: var(--text-3); padding-left: 12px; line-height: 1.2; }
+.cal-strip { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-top: auto; padding-top: 6px; }
 .cal-strip .d { text-align: center; }
 .cal-strip .dl {
-  font-size: 22px; font-weight: 600; color: var(--text-3);
-  width: 30px; height: 30px; line-height: 30px; border-radius: 50%; margin: 0 auto 5px;
+  font-size: 21px; font-weight: 600; color: var(--text-3);
+  width: 26px; height: 26px; line-height: 26px; border-radius: 50%; margin: 0 auto 4px;
 }
 .cal-strip .d.today .dl { background: var(--tint-blue); color: #fff; }
 .cal-strip .dots { display: flex; gap: 4px; justify-content: center; height: 10px; }
@@ -314,12 +315,12 @@ body {
 .iss-lookup { font-size: 72px; font-weight: 700; letter-spacing: -.03em; }
 
 /* ── music ───────────────────────────────────────────────────────── */
-#c-mus { padding: 20px 24px; gap: 8px; }
+#c-mus { padding: 14px 22px; gap: 4px; }
 .mus-row {
-  display: flex; gap: 16px; align-items: center; padding: 3px 0;
+  display: flex; gap: 14px; align-items: center; padding: 2px 0;
   color: inherit; text-decoration: none; position: relative; z-index: 2;
 }
-.mus-row + .mus-row { border-top: 1px solid var(--separator); padding-top: 9px; margin-top: 5px; }
+.mus-row + .mus-row { border-top: 1px solid var(--separator); padding-top: 6px; margin-top: 3px; }
 .mus-art {
   width: 62px; height: 62px; border-radius: 10px; flex: 0 0 auto;
   object-fit: cover; background: var(--bg-card-2); display: block;
@@ -329,9 +330,9 @@ body {
   font-size: 38px; font-weight: 700; color: var(--text-3);
 }
 .mus-meta { min-width: 0; }
-.mus-tag { font-size: 20px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; line-height: 1.2; }
-.mus-ti { font-size: 26px; font-weight: 600; line-height: 1.15; }
-.mus-ar { font-size: 22px; color: var(--text-2); line-height: 1.2; }
+.mus-tag { font-size: 19px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; line-height: 1.15; }
+.mus-ti { font-size: 24px; font-weight: 600; line-height: 1.15; }
+.mus-ar { font-size: 21px; color: var(--text-2); line-height: 1.15; }
 
 /* ── tappable cards ───────────────────────────────────────────────── */
 .card__link { position: absolute; inset: 0; z-index: 2; border-radius: var(--radius); }
