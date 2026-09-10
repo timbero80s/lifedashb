@@ -11,6 +11,7 @@ import { initAstro } from './widgets/astro.js';
 import { initF1 } from './widgets/f1.js';
 import { initMusic } from './widgets/music.js';
 import { initHousehold } from './widgets/household.js';
+import { initQuote } from './widgets/quote.js';
 
 // ── fit the fixed 2000x1200 canvas to whatever the device reports ────────
 // The Fire's browser may report 2000 CSS px or 1000 at DPR 2. Scaling the
@@ -84,6 +85,7 @@ async function main() {
   initISS(coords);
   initMusic();
   initHousehold();
+  initQuote();
 }
 
 main();

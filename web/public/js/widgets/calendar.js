@@ -7,7 +7,7 @@ import { reportStatus } from '../bus.js';
 // So: today and tomorrow at reading size, and the rest of the week as a
 // density strip. Fixed height regardless of how busy the week is.
 const MAX_TODAY = 3;
-const MAX_TOMORROW = 2;
+const MAX_TOMORROW = 1;
 const DAY_LETTER = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
 function demo(now) {

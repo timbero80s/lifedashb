@@ -98,17 +98,27 @@ export const CONFIG = {
         { date: '2027-05-03', label: 'Bank holiday' },
         { date: '2027-06-28', label: 'INSET day' },
       ],
-      // Recurring weekday reminders, e.g. { 1: 'PE kit' } for Mondays.
-      // Empty until you tell me what actually needs remembering.
-      notes: {},
+      // Weekday reminders (0=Sun … 6=Sat). From Teo's Year 9 timetable:
+      // Games is period 5 Tuesday on the Field, and PE is in the Sports Hall
+      // on Friday — in BOTH Week A and Week B, so kit days don't depend on
+      // knowing which week it is.
+      notes: {
+        2: 'Games kit (outdoor)',
+        4: 'Hockey kit',
+        5: 'PE kit (indoor)',
+      },
     },
   },
 
   // --- Refresh intervals (minutes) -----------------------------------------
   refresh: {
     weather: 15, calendar: 10, football: 180, trains: 5,
-    iss: 180, astro: 30, f1: 180, music: 360, house: 30,
+    iss: 180, astro: 30, f1: 180, music: 360, house: 30, quote: 360,
   },
+
+  // --- Quote bar -----------------------------------------------------------
+  // How often the quote changes. The backend serves a fresh set each day.
+  quote: { rotateMinutes: 25 },
 
   // --- Overnight behaviour -------------------------------------------------
   night: {

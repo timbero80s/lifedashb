@@ -65,7 +65,7 @@ body {
   display: grid;
   /* minmax(0,1fr) — a bare 1fr is minmax(auto,1fr) and will grow past its
      share when a card's content is tall, pushing the last row off-screen. */
-  grid-template-rows: 140px minmax(0, 1fr);
+  grid-template-rows: 140px minmax(0, 1fr) 118px;
   gap: var(--gutter);
   filter: brightness(var(--gain));
   transition: filter 20s linear;
@@ -172,7 +172,7 @@ body {
 
 /* ── calendar ─────────────────────────────────────────────────────── */
 .cal-head { font-size: 22px; font-weight: 700; color: var(--text-2); letter-spacing: .05em; text-transform: uppercase; margin: 2px 0 3px; }
-.cal-ev { display: flex; gap: 12px; align-items: baseline; padding: 5px 0 5px 12px; position: relative; }
+.cal-ev { display: flex; gap: 12px; align-items: baseline; padding: 4px 0 4px 12px; position: relative; }
 .cal-ev + .cal-ev { border-top: 1px solid var(--separator); }
 .cal-ev .t { font-size: 25px; color: var(--text-2); flex: 0 0 auto; width: 78px; }
 .cal-ev .s { font-size: 27px; font-weight: 500; }
@@ -182,7 +182,7 @@ body {
 }
 .cal-ev.past { opacity: .4; }
 .cal-more { font-size: 22px; color: var(--text-3); padding-left: 12px; }
-.cal-strip { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-top: auto; padding-top: 14px; }
+.cal-strip { display: grid; grid-template-columns: repeat(7,1fr); gap: 6px; margin-top: auto; padding-top: 10px; }
 .cal-strip .d { text-align: center; }
 .cal-strip .dl {
   font-size: 22px; font-weight: 600; color: var(--text-3);
@@ -193,7 +193,7 @@ body {
 .cal-strip .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-2); }
 
 /* ── trains ───────────────────────────────────────────────────────── */
-.tr-sec + .tr-sec { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--separator); }
+.tr-sec + .tr-sec { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--separator); }
 .tr-head { display: flex; align-items: baseline; gap: 12px; font-size: 22px; font-weight: 700; color: var(--text-2); letter-spacing: .03em; margin-bottom: 4px; }
 .tr-head .arrow { color: var(--tint-blue); }
 .tr-sec.from .tr-head .arrow { color: var(--tint-teal); }
@@ -214,7 +214,7 @@ body {
 
 /* ── weather outlook ──────────────────────────────────────────────── */
 .wx-meta { font-size: 26px; color: var(--text-2); margin-bottom: 6px; }
-.wx-day { display: flex; align-items: center; gap: 14px; padding: 11px 0; font-size: 30px; }
+.wx-day { display: flex; align-items: center; gap: 14px; padding: 9px 0; font-size: 28px; }
 .wx-day + .wx-day { border-top: 1px solid var(--separator); }
 .wx-day .d { width: 74px; color: var(--text-2); flex: 0 0 auto; }
 .wx-day .ic { width: 34px; flex: 0 0 auto; }
@@ -234,7 +234,7 @@ body {
 .moon i { position: absolute; inset: 0; border-radius: 50%; background: var(--bg-card); }
 .moon-txt .nm { font-size: 26px; font-weight: 600; line-height: 1.2; }
 .moon-txt .pc { font-size: 24px; color: var(--text-2); }
-.astro-row { display: flex; justify-content: space-between; align-items: baseline; padding: 10px 0; font-size: 30px; }
+.astro-row { display: flex; justify-content: space-between; align-items: baseline; padding: 8px 0; font-size: 28px; }
 .astro-row + .astro-row { border-top: 1px solid var(--separator); }
 .astro-row .k { color: var(--text-2); font-size: 26px; }
 
@@ -260,7 +260,7 @@ body {
 
 /* ── football ─────────────────────────────────────────────────────── */
 #football-body { display: flex; flex-direction: column; justify-content: space-between; }
-.fb-club { padding: 10px 0 10px 14px; position: relative; }
+.fb-club { padding: 8px 0 8px 14px; position: relative; }
 .fb-club + .fb-club { border-top: 1px solid var(--separator); }
 .fb-club .bar { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 2px; background: var(--text-3); }
 .fb-top { display: flex; align-items: baseline; gap: 12px; }
@@ -321,7 +321,7 @@ body {
 }
 .mus-row + .mus-row { border-top: 1px solid var(--separator); padding-top: 9px; margin-top: 5px; }
 .mus-art {
-  width: 68px; height: 68px; border-radius: 10px; flex: 0 0 auto;
+  width: 62px; height: 62px; border-radius: 10px; flex: 0 0 auto;
   object-fit: cover; background: var(--bg-card-2); display: block;
 }
 .mus-art--fallback {
@@ -340,6 +340,31 @@ body {
   font-size: 20px; font-weight: 700; color: var(--text-3);
 }
 .card.is-alert .card__go { color: rgba(255,255,255,.6); }
+
+/* ── quote bar ───────────────────────────────────────────────────── */
+.quote {
+  flex-direction: row; align-items: center; gap: 22px;
+  padding: 16px 26px;
+}
+.quote__cover {
+  height: 84px; width: auto; max-width: 62px; flex: 0 0 auto;
+  border-radius: 4px; object-fit: cover; display: block;
+  background: var(--bg-card-2);
+}
+.quote__body { min-width: 0; flex: 1; }
+.quote__q {
+  font-size: 30px; font-weight: 500; line-height: 1.25;
+  transition: opacity .4s ease;
+}
+.quote__meta {
+  font-size: 22px; color: var(--text-2); margin-top: 5px;
+  transition: opacity .4s ease;
+}
+.quote__meta b { font-weight: 600; color: var(--text-1); }
+.quote.swap .quote__q,
+.quote.swap .quote__meta,
+.quote.swap .quote__cover { opacity: 0; }
+.quote__cover { transition: opacity .4s ease; }
 
 /* ── night face ───────────────────────────────────────────────────── */
 #nightface {

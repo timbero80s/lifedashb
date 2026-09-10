@@ -23,7 +23,7 @@ const headers = (seconds) => ({
 // RTT's free tier: 10/min, 100/hour, 1000/DAY — the daily cap is the binding
 // one. Each origin hit costs 2 location calls, so a 300s edge TTL over ~18
 // waking hours is 12*2*18 = 432/day. The widget also stops polling overnight.
-const TTL = { calendar: 300, football: 1800, trains: 300, iss: 3600, f1: 3600, music: 21600 };
+const TTL = { calendar: 300, football: 1800, trains: 300, iss: 3600, f1: 3600, music: 21600, quote: 21600 };
 
 // a response we don't want cached for long because upstream probably choked
 function isThin(service, data) {
@@ -34,6 +34,7 @@ function isThin(service, data) {
   if (service === 'iss') return !data.passes || data.passes.length === 0;
   if (service === 'f1') return !data.race;
   if (service === 'music') return !(data.onThisDay || []).length && !(data.newReleases || []).length;
+  if (service === 'quote') return !(data.quotes || []).length;
   if (service === 'calendar') return false; // an empty week is legitimately empty
   return false;
 }
@@ -49,6 +50,7 @@ exports.handler = async (event) => {
       case 'iss':      data = await iss(event.queryStringParameters || {}); break;
       case 'f1':       data = await f1(); break;
       case 'music':    data = await music(); break;
+      case 'quote':    data = await quote(); break;
       default:
         return { statusCode: 400, headers: headers(60), body: JSON.stringify({ error: 'unknown service' }) };
     }
@@ -665,3 +667,70 @@ async function music() {
     newReleases: neu.map(map).filter((x) => !/^Q\d+$/.test(x.artist)),
   };
 }
+
+// ===========================================================================
+//  QUOTE OF THE MOMENT
+//  A hand-picked list rather than a quotes API, because the APIs mostly serve
+//  motivational filler. Short, attributed, heavily weighted to public domain.
+//  Open Library supplies the sleeve; the year here is authoritative (Open
+//  Library's first_publish_year often reflects a translation or reprint).
+// ===========================================================================
+const QUOTES = [
+  { t: 'It was the best of times, it was the worst of times.', a: 'Charles Dickens', b: 'A Tale of Two Cities', y: 1859, c: 13301713 },
+  { t: 'Call me Ishmael.', a: 'Herman Melville', b: 'Moby-Dick', y: 1851, c: 10544254 },
+  { t: 'It is not down in any map; true places never are.', a: 'Herman Melville', b: 'Moby-Dick', y: 1851, c: 10544254 },
+  { t: 'All happy families are alike; each unhappy family is unhappy in its own way.', a: 'Leo Tolstoy', b: 'Anna Karenina', y: 1878, c: 2560652 },
+  { t: 'The past is a foreign country: they do things differently there.', a: 'L. P. Hartley', b: 'The Go-Between', y: 1953, c: 717615 },
+  { t: 'We are all in the gutter, but some of us are looking at the stars.', a: 'Oscar Wilde', b: "Lady Windermere's Fan", y: 1892, c: 3075636 },
+  { t: 'Whereof one cannot speak, thereof one must be silent.', a: 'Ludwig Wittgenstein', b: 'Tractatus Logico-Philosophicus', y: 1921, c: 5415771 },
+  { t: 'The limits of my language mean the limits of my world.', a: 'Ludwig Wittgenstein', b: 'Tractatus Logico-Philosophicus', y: 1921, c: 5415771 },
+  { t: 'One must imagine Sisyphus happy.', a: 'Albert Camus', b: 'The Myth of Sisyphus', y: 1942, c: 12726570 },
+  { t: 'It was a bright cold day in April, and the clocks were striking thirteen.', a: 'George Orwell', b: 'Nineteen Eighty-Four', y: 1949, c: 9267242 },
+  { t: 'All animals are equal, but some animals are more equal than others.', a: 'George Orwell', b: 'Animal Farm', y: 1945, c: 11261770 },
+  { t: 'Someone must have slandered Josef K., for one morning he was arrested.', a: 'Franz Kafka', b: 'The Trial', y: 1925, c: 14910748 },
+  { t: 'So we beat on, boats against the current, borne back ceaselessly into the past.', a: 'F. Scott Fitzgerald', b: 'The Great Gatsby', y: 1925, c: 10590366 },
+  { t: 'The mind is its own place, and in itself can make a heaven of hell.', a: 'John Milton', b: 'Paradise Lost', y: 1667, c: 5992814 },
+  { t: 'I would prefer not to.', a: 'Herman Melville', b: 'Bartleby, the Scrivener', y: 1853, c: 10521439 },
+  { t: 'Time is the substance I am made of.', a: 'Jorge Luis Borges', b: 'Labyrinths', y: 1962, c: 10831408 },
+  { t: 'The world is full of obvious things which nobody by any chance ever observes.', a: 'Arthur Conan Doyle', b: 'The Hound of the Baskervilles', y: 1902, c: 8063264 },
+  { t: 'Ever tried. Ever failed. No matter. Try again. Fail again. Fail better.', a: 'Samuel Beckett', b: 'Worstward Ho', y: 1983, c: 6635734 },
+  { t: "The past is never dead. It's not even past.", a: 'William Faulkner', b: 'Requiem for a Nun', y: 1951, c: 9327745 },
+  { t: 'For most of history, Anonymous was a woman.', a: 'Virginia Woolf', b: "A Room of One's Own", y: 1929, c: 6559057 },
+  { t: 'Life must be understood backwards, but it must be lived forwards.', a: 'Søren Kierkegaard', b: 'Journals', y: 1843, c: 10047852 },
+  { t: 'Man is born free, and everywhere he is in chains.', a: 'Jean-Jacques Rousseau', b: 'The Social Contract', y: 1762, c: 2292601 },
+  { t: 'Whoever fights monsters should see to it that he does not become a monster.', a: 'Friedrich Nietzsche', b: 'Beyond Good and Evil', y: 1886, c: 14444933 },
+  { t: 'Not all those who wander are lost.', a: 'J. R. R. Tolkien', b: 'The Fellowship of the Ring', y: 1954, c: 14627060 },
+  { t: 'Any sufficiently advanced technology is indistinguishable from magic.', a: 'Arthur C. Clarke', b: 'Profiles of the Future', y: 1962, c: 380579 },
+  { t: 'So it goes.', a: 'Kurt Vonnegut', b: 'Slaughterhouse-Five', y: 1969, c: 12727001 },
+  { t: 'We are what we pretend to be, so we must be careful what we pretend to be.', a: 'Kurt Vonnegut', b: 'Mother Night', y: 1961, c: 239848 },
+  { t: 'The unexamined life is not worth living.', a: 'Plato', b: 'Apology', y: -399, c: 14398204 },
+  { t: 'It does not do to dwell on dreams and forget to live.', a: 'J. K. Rowling', b: "Harry Potter and the Philosopher's Stone", y: 1997, c: 15155833 },
+  { t: 'There is no greater agony than bearing an untold story inside you.', a: 'Maya Angelou', b: 'I Know Why the Caged Bird Sings', y: 1969, c: 9367075 },
+  { t: 'It is a truth universally acknowledged, that a single man in possession of a good fortune must be in want of a wife.', a: 'Jane Austen', b: 'Pride and Prejudice', y: 1813, c: 14348537 },
+  { t: 'Memory believes before knowing remembers.', a: 'William Faulkner', b: 'Light in August', y: 1932, c: 8292249 },
+  { t: 'Beware; for I am fearless, and therefore powerful.', a: 'Mary Shelley', b: 'Frankenstein', y: 1818, c: 12356249 },
+  { t: 'I am no bird; and no net ensnares me.', a: 'Charlotte Brontë', b: 'Jane Eyre', y: 1847, c: 8235363 },
+  { t: 'Heaven knows we need never be ashamed of our tears.', a: 'Charles Dickens', b: 'Great Expectations', y: 1861, c: 13322313 },
+  { t: 'A man who dares to waste one hour of time has not discovered the value of life.', a: 'Charles Darwin', b: 'The Life and Letters of Charles Darwin', y: 1887, c: 1789659 },
+  { t: 'The truth is rarely pure and never simple.', a: 'Oscar Wilde', b: 'The Importance of Being Earnest', y: 1895, c: 1260453 },
+  { t: 'There are years that ask questions and years that answer.', a: 'Zora Neale Hurston', b: 'Their Eyes Were Watching God', y: 1937, c: 12752055 },
+  { t: 'The greatest hazard of all, losing oneself, can occur very quietly in the world.', a: 'Søren Kierkegaard', b: 'The Sickness Unto Death', y: 1849, c: 104000 },
+];
+
+const QUOTES_PER_DAY = 6;
+
+async function quote() {
+  // Cover ids were resolved from Open Library once and baked in, so this
+  // endpoint makes no external calls: instant, and immune to their rate limit.
+  const day = Math.floor(Date.now() / 864e5);
+  const quotes = [];
+  for (let i = 0; i < QUOTES_PER_DAY; i++) {
+    const q = QUOTES[(day * QUOTES_PER_DAY + i) % QUOTES.length];
+    quotes.push({
+      text: q.t, author: q.a, book: q.b, year: q.y,
+      cover: q.c ? `https://covers.openlibrary.org/b/id/${q.c}-M.jpg` : null,
+    });
+  }
+  return { quotes };
+}
+
