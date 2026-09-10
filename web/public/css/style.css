@@ -316,12 +316,12 @@ body {
 /* ── music ───────────────────────────────────────────────────────── */
 #c-mus { padding: 20px 24px; gap: 8px; }
 .mus-row {
-  display: flex; gap: 16px; align-items: center; padding: 4px 0;
+  display: flex; gap: 16px; align-items: center; padding: 3px 0;
   color: inherit; text-decoration: none; position: relative; z-index: 2;
 }
-.mus-row + .mus-row { border-top: 1px solid var(--separator); padding-top: 12px; margin-top: 8px; }
+.mus-row + .mus-row { border-top: 1px solid var(--separator); padding-top: 9px; margin-top: 5px; }
 .mus-art {
-  width: 70px; height: 70px; border-radius: 10px; flex: 0 0 auto;
+  width: 68px; height: 68px; border-radius: 10px; flex: 0 0 auto;
   object-fit: cover; background: var(--bg-card-2); display: block;
 }
 .mus-art--fallback {
@@ -329,9 +329,9 @@ body {
   font-size: 38px; font-weight: 700; color: var(--text-3);
 }
 .mus-meta { min-width: 0; }
-.mus-tag { font-size: 21px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; }
-.mus-ti { font-size: 27px; font-weight: 600; line-height: 1.2; }
-.mus-ar { font-size: 23px; color: var(--text-2); }
+.mus-tag { font-size: 20px; font-weight: 700; color: var(--text-3); letter-spacing: .05em; line-height: 1.2; }
+.mus-ti { font-size: 26px; font-weight: 600; line-height: 1.15; }
+.mus-ar { font-size: 22px; color: var(--text-2); line-height: 1.2; }
 
 /* ── tappable cards ───────────────────────────────────────────────── */
 .card__link { position: absolute; inset: 0; z-index: 2; border-radius: var(--radius); }
