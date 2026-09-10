@@ -20,9 +20,10 @@ const headers = (seconds) => ({
 });
 
 // how long the CDN may cache each service's response
-// RTT's free tier allows 10 req/min and 100 req/hour. Two location calls per
-// origin hit at a 150s edge TTL is ~48/hour, comfortably inside it.
-const TTL = { calendar: 300, football: 1800, trains: 150, iss: 3600, f1: 3600, music: 21600 };
+// RTT's free tier: 10/min, 100/hour, 1000/DAY — the daily cap is the binding
+// one. Each origin hit costs 2 location calls, so a 300s edge TTL over ~18
+// waking hours is 12*2*18 = 432/day. The widget also stops polling overnight.
+const TTL = { calendar: 300, football: 1800, trains: 300, iss: 3600, f1: 3600, music: 21600 };
 
 // a response we don't want cached for long because upstream probably choked
 function isThin(service, data) {

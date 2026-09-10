@@ -106,7 +106,7 @@ export const CONFIG = {
 
   // --- Refresh intervals (minutes) -----------------------------------------
   refresh: {
-    weather: 15, calendar: 10, football: 180, trains: 2.5,
+    weather: 15, calendar: 10, football: 180, trains: 5,
     iss: 180, astro: 30, f1: 180, music: 360, house: 30,
   },
 

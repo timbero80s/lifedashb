@@ -5,6 +5,13 @@ import { reportStatus, setAlert, clearAlert } from '../bus.js';
 const lateMins = (t) => Math.round((new Date(t.expected) - new Date(t.scheduled)) / 60000);
 const isCancelled = (t) => /cancel/i.test(t.status || '');
 
+// Nobody is catching a train at 03:00 and the night face is up anyway, so
+// don't spend the daily API quota on hours no one is looking.
+function inServiceHours() {
+  const { hour } = tzParts(new Date(), CONFIG.timezone);
+  return hour >= 6 && hour < 23;
+}
+
 function inCommuteWindow() {
   const { hour, minute } = tzParts(new Date(), CONFIG.timezone);
   const cur = hour * 60 + minute;
@@ -17,6 +24,7 @@ export function initTrains() {
   const card = $('#c-tr');
 
   async function load() {
+    if (!inServiceHours()) { clearAlert('trains'); return; }
     const { value, stale } = await withCache('trains', async () => {
       const r = await fetchJSON(`${CONFIG.apiBase}?service=trains`);
       if (!r || !Array.isArray(r.toLondon)) throw new Error('bad trains payload');
