@@ -1,205 +1,112 @@
 # Wall Dashboard
 
-**Live:** https://timbero-wall-dashboard.netlify.app
-(Netlify site `timbero-wall-dashboard`, deployed 2026-09-08.)
+An always-on wall dashboard for an **Amazon Fire Max 11** (landscape, 2000×1200),
+designed as non-interactive iOS-style widget cards on a dark ground and sized to
+be read from 1–3 metres across a room.
 
-**Still to do:** add `RTT_TOKEN` in Netlify for the trains widget — sign up at
-https://api-portal.rtt.io/ and request an API token, then Netlify → Site
-configuration → Environment variables → add **key** `RTT_TOKEN`, **value** the
-whole token string → Deploys → Trigger deploy. Everything else is live.
+**Live:** https://wall-dashboard.faboinn.workers.dev
+**Source:** https://github.com/timbero80s/lifedashb
 
-To redeploy after editing files in `web/`: from the `web/` directory run
-`npx -y @netlify/mcp@latest --site-id bbd13bb4-48d1-447b-8e2f-49a779b47c87`
-(it will prompt you to sign in to Netlify), or connect the GitHub repo to the
-site for automatic deploys.
+## What's on it
 
----
-
-## Fill this in: bin day
-
-`web/public/js/config.js` → `household.bins`. Set `day` to your collection
-weekday (0 = Sunday … 6 = Saturday), `anchorDate` to any date you know was a
-collection, and `anchorType` to which of the alternating bins went out that day.
-The cycle is worked out from there — no API, nothing to go stale. School term
-dates and weekday reminders live in the same block.
-
----
-
-A wall dashboard for an **Amazon Fire Max 11** (landscape), designed as
-non-interactive iOS-style widget cards on a dark ground. One web page, no app
-store. It shows:
-
-- Date, day-of-week, week number, big 7-segment clock
-- Weather for your postcode (now + 5-day), from the UK Met Office model via Open-Meteo
-- Your **weekly Google Calendar** (Mon–Sun grid)
-- League position + last/next fixture for **Tottenham**, **Maidenhead United**, **Ferro Carril Oeste**
-- **Maidenhead ⇆ London** trains (to Paddington, and arrivals from Paddington)
-- Next visible **ISS pass** over your postcode, with a "LOOK UP" alert
-- **Moon phase**, sunrise, sunset, day length
-- A ticker of positive **hardware / AI** headlines mixed with **Claude Code / Claude-as-coworker tips**
-
-It keeps showing the last good data if the network drops, and the little dot
-top-right goes green / amber / red for data health.
-
----
-
-## How it's built
-
-- `public/` — the dashboard itself (plain HTML/CSS/JS, no build step)
-- `netlify/functions/api.js` — a tiny serverless proxy that holds your API keys
-  and fetches the things a browser can't fetch directly (calendar, trains, ISS,
-  Spurs table)
-- Hosted free on **Netlify**
-
-Weather, moon/sun and the news ticker work **without any backend** — so if you
-just open `public/index.html` on a web server you already get a live dashboard,
-with demo placeholders for calendar / football / trains / ISS until you deploy.
-
----
-
-## Setup — step by step
-
-### 1. Create the free accounts you need
-
-| What | Where | Gives you |
+| Card | Source | Key needed |
 |---|---|---|
-| Netlify | https://app.netlify.com/signup | hosting + the proxy |
-| football-data.org | https://www.football-data.org/client/register | Tottenham table & fixtures (`FOOTBALL_DATA_TOKEN`) |
-| Realtime Trains | https://api-portal.rtt.io/ → sign up → request an API token | train times (`RTT_TOKEN`) |
-| N2YO (optional) | https://www.n2yo.com/api/ | better ISS passes (`N2YO_API_KEY`). If you skip it a keyless service is used automatically. |
+| Clock, date, week number | local | — |
+| Weather now + 4-day outlook | Open-Meteo (UK Met Office model) | no |
+| Calendar — today, tomorrow, week density strip | Google secret iCal | yes |
+| Today in the house — bins, school term, kit reminders, Week A/B | local config | no |
+| Trains — Maidenhead ⇄ Paddington | Realtime Trains | yes |
+| Football — Tottenham, Maidenhead Utd, Ferro Carril Oeste | football-data.org + thesportsdb | partly |
+| Formula 1 — next race + Colapinto's standing | Jolpica | no |
+| ISS — next visible pass, with sky arc | N2YO, keyless fallback | optional |
+| Sun & moon | computed locally | no |
+| Music — on this day + new releases, with sleeve art | Wikidata + Cover Art Archive | no |
+| Quote bar — quote, author, book, year, cover | curated + Open Library | no |
 
-For **thesportsdb** (Maidenhead Utd + Ferro) no signup is required — the free
-test key `3` is used by default. A Patreon key (`SPORTSDB_KEY`) unlocks
-next-fixture data for the lower leagues; without it you still get league
-position and last result where available.
+Every card keeps showing its last good data if a source fails, and the dot by the
+temperature goes green / amber / red for overall data health.
 
-### 2. Get your Google Calendar link(s)
+## Deploying
 
-For **each** calendar you want on the wall:
-
-1. Google Calendar (on a computer) → hover the calendar in the left list →
-   **⋮ → Settings and sharing**
-2. Scroll to **Integrate calendar**
-3. Copy **"Secret address in iCal format"** (ends in `/basic.ics`)
-
-Keep these private — anyone with the link can read that calendar. They go into
-Netlify as an environment variable, **not** into the code.
-
-### 3. Deploy to Netlify
-
-**Option A — drag and drop (quickest)**
-
-1. Zip the `web/` folder (or just its contents)
-2. Go to https://app.netlify.com/drop and drop it
-3. Open **Site configuration → Build & deploy → Continuous deployment** is not
-   needed; just note your site URL (e.g. `https://something.netlify.app`)
-
-**Option B — from GitHub (best for updates)**
-
-1. Push this repo to GitHub
-2. Netlify → **Add new site → Import an existing project** → pick the repo
-3. Set **Base directory** to `web`, **Publish directory** to `web/public`,
-   **Functions directory** to `web/netlify/functions` (the `netlify.toml`
-   already sets these if base directory is `web`)
-
-### 4. Add your keys to Netlify
-
-Netlify → **Site configuration → Environment variables → Add a variable**.
-Add the ones you have (see `.env.example` for the full list):
+No build step and no dependencies — a deploy just uploads files:
 
 ```
-CALENDAR_ICS_URLS   = https://calendar.google.com/.../basic.ics,https://calendar.google.com/.../basic.ics
-FOOTBALL_DATA_TOKEN = <your football-data.org token>
-RTT_TOKEN           = <your api-portal.rtt.io token>
-N2YO_API_KEY        = <optional>
-SPORTSDB_KEY        = 3
+cd web
+npx -y wrangler@latest deploy
 ```
 
-Then **Deploys → Trigger deploy → Deploy site** so the new variables take effect.
+About fifteen seconds, and it consumes no build minutes. That is the whole
+reason this moved off Netlify, whose free build credits ran out mid-project.
 
-### 5. Check it
+On a new machine, authorise once with `npx -y wrangler@latest login`.
 
-Open your Netlify URL in a normal browser. You can test the proxy directly:
+Preview locally first with `npx -y wrangler@latest dev` — that serves the static
+files and `/api` together on one port, exactly as production does.
 
-- `https://your-site.netlify.app/api?service=calendar`
-- `https://your-site.netlify.app/api?service=football`
-- `https://your-site.netlify.app/api?service=trains`
-- `https://your-site.netlify.app/api?service=iss&lat=51.52&lon=-0.72`
+## Secrets
 
-Each should return JSON. If one returns an error, the message tells you which
-key is missing or wrong.
+Stored encrypted by Cloudflare, never in this repo. Set them in the dashboard
+(Workers → `wall-dashboard` → Settings → Variables and Secrets) or with
+`npx -y wrangler@latest secret put NAME`:
 
----
+| Name | Where to get it |
+|---|---|
+| `CALENDAR_ICS_URLS` | Google Calendar → ⋮ → Settings and sharing → Integrate calendar → **Secret address in iCal format**. Comma-separated for several calendars. |
+| `FOOTBALL_DATA_TOKEN` | https://www.football-data.org/client/register |
+| `RTT_TOKEN` | https://api-portal.rtt.io/ → request an API token |
+| `N2YO_API_KEY` | https://www.n2yo.com/api/ — optional; a keyless source is used if absent |
 
-## Put it on the Fire tablet
-
-1. On the Fire: **Settings → Device Options → tap "Serial Number" 7 times** to
-   unlock Developer Options, then turn on **Stay awake while charging**.
-2. Install **Fully Kiosk Browser** (free) from the Amazon Appstore (or use the
-   Silk browser in full-screen).
-3. In Fully Kiosk:
-   - **Start URL** = your Netlify URL
-   - Turn on **Kiosk Mode**, **Keep screen on**, **Auto-reload on idle** (e.g.
-     every few hours), and **Launch on boot**
-   - Optionally set a **screen dim** schedule (the dashboard also dims itself
-     late at night — see `nightDim` in config)
-4. Mount the tablet in landscape, keep it on the charger.
-
----
+Non-secret settings (`TRAIN_STATION`, `TRAIN_LONDON`, `SPORTSDB_KEY`,
+`F1_DRIVER_ID`) live in `wrangler.jsonc` under `vars`.
 
 ## Changing things
 
-Everything you'd want to tweak is in **`public/js/config.js`** (safe to edit,
-no secrets):
+Nearly everything is in **`public/js/config.js`**, which holds no secrets:
 
-- `postcode`, `placeLabel`
-- `trains.station` / `londonTerminus` (CRS codes — Maidenhead is `MAI`)
-- `clubs` list and their data-source hints
-- `lcdMode`: `positive` (chosen), `negative`, or `auto`
-- `nightDim` schedule
-- `refresh` intervals
+- `postcode`, `placeLabel`, `timezone`
+- `clubs` — which teams, and their identity colour
+- `f1.driverId` / `driverLabel`
+- `household.bins` — collection night, and the green/black alternation anchor
+- `household.school` — terms, holidays, INSET closures, the Week A/B cycle
+  anchor, and weekday kit reminders
+- `iss` thresholds, `refresh` intervals, `night` dimming and night-face hours
 
-Edit the **Claude tips** shown in the ticker in `public/js/tips.js`.
+The quote list lives in `src/worker.js`. Each entry carries a baked-in Open
+Library cover id (`c:`), resolved once so the endpoint makes no external calls;
+to add a quote, look its cover up via
+`openlibrary.org/search.json?title=…&author=…&fields=cover_i`.
 
-After editing, redeploy (Option A: drop the folder again; Option B: `git push`).
+## How it's put together
 
----
+- `public/` — the page: plain HTML/CSS/ES modules, no framework, no build
+- `src/worker.js` — one Cloudflare Worker serving `/api` and proxying the
+  sources that need a key or that a browser can't reach directly
+- `wrangler.jsonc` — assets, KV binding, and the non-secret vars
 
-## Known limits (free data sources)
+The page is authored at a fixed 2000×1200 and scaled to the viewport at runtime,
+because the Fire's browser may report either 2000 or 1000 CSS pixels. Type has a
+hard floor of 22px: anything that cannot be read at arm's length across a room
+does not belong on a wall.
 
-- **Tottenham**: full data (table, form, last & next fixture) via football-data.org.
-- **Ferro Carril Oeste** (Primera Nacional): league position **and** last/next
-  fixture both come through on thesportsdb's free tier.
-- **Maidenhead United** (National League): last/next fixture come through, but
-  **league position shows "table n/a"** — thesportsdb's free tier only returns
-  the top 5 of a table and files Maidenhead under the wrong division. A paid
-  thesportsdb key (`SPORTSDB_KEY`) would fix this.
-- thesportsdb's shared free key is rate-limited, so the backend caches a good
-  response at Netlify's edge for 30 min and the tablet keeps the best data it
-  has seen — a momentary upstream failure never blanks the panel.
-- **Trains**: matched by destination/origin containing "Paddington", which
-  covers GWR and most Elizabeth line services to/from London. Realtime Trains
-  free tier is for personal use.
-- **ISS**: visible passes genuinely don't happen every day — quiet stretches are
-  normal, not a bug.
-- **Weather** uses `ukmo_seamless` (UK Met Office) with no API key.
+## Known limits of the free data
 
----
+- **Maidenhead United's league position** shows "table n/a" — thesportsdb's free
+  tier only returns the top 5 of a table. Fixtures and results do come through.
+- **thesportsdb's shared test key is rate-limited**, so a good response is cached
+  at the edge for 30 minutes, thin responses for only 15 seconds, and the last
+  good per-club data is kept in KV and in the tablet's own storage.
+- **Realtime Trains' free tier** allows 1000 calls/day. Each origin hit costs
+  two, so the widget polls every 5 minutes and stops overnight.
+- **ISS passes** genuinely don't happen every night. "No visible pass" is
+  normal, not a fault.
 
-## Local preview (optional, needs Node)
+## On the tablet
 
-```bash
-cd web
-npm i -g netlify-cli
-netlify dev
-```
+1. Fire settings → Device Options → tap Serial Number seven times → Developer
+   Options → **Stay awake while charging**.
+2. Install **Fully Kiosk Browser**, set the start URL to the live link above,
+   and turn on Kiosk Mode, Keep Screen On, and Launch on Boot.
+3. Mount landscape, leave it on the charger.
 
-Without Node you can still preview the front-end only:
-
-```bash
-cd web/public
-python3 -m http.server 8777
-# open http://localhost:8777
-```
-
-(calendar/football/trains/ISS show demo data until deployed to Netlify)
+The dashboard dims itself through the evening and switches to a minimal amber
+night face between 23:00 and 06:30.
