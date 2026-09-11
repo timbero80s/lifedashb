@@ -59,7 +59,8 @@ export function initFootball() {
       }
       if (c.nextMatch) {
         const d = new Date(c.nextMatch.utcDate);
-        bits.push(el('span', { class: 'faint', text: ' · ' }));
+        // only separate if there is actually a result in front of it
+        if (bits.length) bits.push(el('span', { class: 'faint', text: ' · ' }));
         bits.push(el('span', { text:
           `${fmtDay(d, CONFIG.timezone)} ${fmtTime(d, CONFIG.timezone)} ${c.nextMatch.opponent} ${c.nextMatch.homeAway || ''}`.trim() }));
       }
