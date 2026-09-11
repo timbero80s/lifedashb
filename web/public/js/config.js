@@ -63,6 +63,7 @@ export const CONFIG = {
         { key: 'green', label: 'Green', colour: '#30D158' },
         { key: 'black', label: 'Black', colour: '#6E6E73' },
       ],
+      // food waste goes out alongside the recycling, so both are weekly
       weekly: [
         { key: 'blue', label: 'Blue', colour: '#0A84FF' },
         { key: 'food', label: 'Food', colour: '#A2845E' },

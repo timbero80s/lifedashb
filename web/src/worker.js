@@ -44,9 +44,16 @@ export default {
     const service = url.searchParams.get('service') || '';
 
     // Workers don't edge-cache dynamic responses automatically the way a CDN
-    // does for static files, so do it explicitly.
+    // does for static files, so do it explicitly. The deployment version goes
+    // into the key, so shipping a change drops the old entries rather than
+    // serving them for the rest of their TTL.
+    const version = (env.CF_VERSION_METADATA && env.CF_VERSION_METADATA.id) || 'dev';
+    const keyUrl = new URL(url);
+    keyUrl.searchParams.set('__v', version);
+    const cacheKey = new Request(keyUrl.toString(), { method: 'GET' });
+
     const cache = caches.default;
-    const hit = await cache.match(request);
+    const hit = await cache.match(cacheKey);
     if (hit) return hit;
 
     let res;
@@ -73,7 +80,7 @@ export default {
     }
 
     // don't block the response on writing to cache
-    ctx.waitUntil(cache.put(request, res.clone()));
+    ctx.waitUntil(cache.put(cacheKey, res.clone()));
     return res;
   },
 };
