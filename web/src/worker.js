@@ -1,25 +1,24 @@
 // ============================================================================
-//  Serverless proxy for the Wall Dashboard.
-//  Routes:  /api?service=calendar | football | trains | iss
-//  Secrets come from Netlify environment variables (see .env.example):
-//    CALENDAR_ICS_URLS   comma-separated Google "secret iCal" URLs
+//  Cloudflare Worker for the Wall Dashboard.
+//  Serves /api?service=... ; everything else falls through to static assets.
+//  Secrets are set with `wrangler secret put NAME` (see README):
+//    CALENDAR_ICS_URLS    comma-separated Google "secret iCal" URLs
 //    FOOTBALL_DATA_TOKEN  football-data.org API token
-//    RTT_USERNAME / RTT_PASSWORD   api.rtt.io credentials
-//    N2YO_API_KEY        n2yo.com API key (optional; falls back to a keyless API)
-//    SPORTSDB_KEY        thesportsdb key (optional, default "3")
+//    RTT_TOKEN            api-portal.rtt.io refresh token
+//    N2YO_API_KEY         n2yo.com key (optional; falls back to a keyless API)
+//  Plain vars (TRAIN_STATION, TRAIN_LONDON, SPORTSDB_KEY) live in wrangler.jsonc.
 // ============================================================================
 
 const headers = (seconds) => ({
   'content-type': 'application/json',
   'access-control-allow-origin': '*',
-  // browser cache
-  'cache-control': `public, max-age=${Math.min(seconds, 120)}`,
-  // Netlify's edge CDN: serve a cached good response and keep serving it while
-  // it revalidates in the background — this is what smooths over flaky upstreams
-  'netlify-cdn-cache-control': `public, durable, s-maxage=${seconds}, stale-while-revalidate=${seconds * 6}`,
+  // The browser holds it briefly; `s-maxage` is what Cloudflare's edge cache
+  // obeys, which is what smooths over the flaky free upstreams.
+  'cache-control': `public, max-age=${Math.min(seconds, 120)}, s-maxage=${seconds}`
+    + `, stale-while-revalidate=${seconds * 6}`,
 });
 
-// how long the CDN may cache each service's response
+// how long the edge may cache each service's response
 // RTT's free tier: 10/min, 100/hour, 1000/DAY — the daily cap is the binding
 // one. Each origin hit costs 2 location calls, so a 300s edge TTL over ~18
 // waking hours is 12*2*18 = 432/day. The widget also stops polling overnight.
@@ -39,32 +38,44 @@ function isThin(service, data) {
   return false;
 }
 
-exports.handler = async (event) => {
-  const service = (event.queryStringParameters || {}).service || '';
-  try {
-    let data;
-    switch (service) {
-      case 'calendar': data = await calendar(); break;
-      case 'football': data = await football(); break;
-      case 'trains':   data = await trains(); break;
-      case 'iss':      data = await iss(event.queryStringParameters || {}); break;
-      case 'f1':       data = await f1(); break;
-      case 'music':    data = await music(); break;
-      case 'quote':    data = await quote(); break;
-      default:
-        return { statusCode: 400, headers: headers(60), body: JSON.stringify({ error: 'unknown service' }) };
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const service = url.searchParams.get('service') || '';
+
+    // Workers don't edge-cache dynamic responses automatically the way a CDN
+    // does for static files, so do it explicitly.
+    const cache = caches.default;
+    const hit = await cache.match(request);
+    if (hit) return hit;
+
+    let res;
+    try {
+      let data;
+      switch (service) {
+        case 'calendar': data = await calendar(env); break;
+        case 'football': data = await football(env); break;
+        case 'trains':   data = await trains(env); break;
+        case 'iss':      data = await iss(Object.fromEntries(url.searchParams), env); break;
+        case 'f1':       data = await f1(env); break;
+        case 'music':    data = await music(env); break;
+        case 'quote':    data = await quote(env); break;
+        default:
+          return new Response(JSON.stringify({ error: 'unknown service' }),
+            { status: 400, headers: headers(60) });
+      }
+      const ttl = isThin(service, data) ? 15 : (TTL[service] || 60);
+      res = new Response(JSON.stringify(data), { status: 200, headers: headers(ttl) });
+    } catch (err) {
+      console.error(service, err);
+      res = new Response(JSON.stringify({ error: String((err && err.message) || err), service }),
+        { status: 502, headers: headers(15) });
     }
-    // never let the edge cache a thin/empty result for long — retry soon instead
-    const ttl = isThin(service, data) ? 15 : (TTL[service] || 60);
-    return { statusCode: 200, headers: headers(ttl), body: JSON.stringify(data) };
-  } catch (err) {
-    console.error(service, err);
-    return {
-      statusCode: 502,
-      headers: headers(15),
-      body: JSON.stringify({ error: String(err && err.message || err), service }),
-    };
-  }
+
+    // don't block the response on writing to cache
+    ctx.waitUntil(cache.put(request, res.clone()));
+    return res;
+  },
 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -89,8 +100,8 @@ const txt = async (url, opts) => {
 // ===========================================================================
 //  CALENDAR
 // ===========================================================================
-async function calendar() {
-  const urls = (process.env.CALENDAR_ICS_URLS || '').split(',').map((s) => s.trim()).filter(Boolean);
+async function calendar(env) {
+  const urls = (env.CALENDAR_ICS_URLS || '').split(',').map((s) => s.trim()).filter(Boolean);
   if (!urls.length) return { events: [], note: 'CALENDAR_ICS_URLS not set' };
 
   const windowStart = Date.now() - 2 * 864e5;
@@ -272,13 +283,16 @@ function seasonCandidates() {
   return [eu, `${Y}`];
 }
 
-// Netlify Blobs — a tiny persistent store so a rate-limited fetch can fall
-// back to the last good data instead of showing "unavailable".
-async function blobStore() {
-  try {
-    const { getStore } = await import('@netlify/blobs');
-    return getStore('dashboard');
-  } catch { return null; }
+// Workers KV — a tiny persistent store so a rate-limited fetch falls back to
+// the last good data instead of showing "unavailable". (The Netlify Blobs
+// version of this never actually worked; KV does.)
+async function kvGet(env, key) {
+  if (!env.CACHE) return null;
+  try { return await env.CACHE.get(key, { type: 'json' }); } catch { return null; }
+}
+async function kvPut(env, key, value) {
+  if (!env.CACHE) return;
+  try { await env.CACHE.put(key, JSON.stringify(value), { expirationTtl: 7 * 86400 }); } catch {}
 }
 
 function mergeClubRec(fresh, prev) {
@@ -296,10 +310,8 @@ function mergeClubRec(fresh, prev) {
   return out;
 }
 
-async function football() {
-  const store = await blobStore();
-  let prev = null;
-  if (store) { try { prev = await store.get('football', { type: 'json' }); } catch {} }
+async function football(env) {
+  const prev = await kvGet(env, 'football');
   const prevClubs = (prev && prev.clubs) || [];
 
   const out = [];
@@ -307,26 +319,26 @@ async function football() {
     const rec = { key: c.key, name: c.name, position: null, played: null, points: null,
       form: '', lastMatch: null, nextMatch: null, note: null };
     try {
-      if (c.fdId && process.env.FOOTBALL_DATA_TOKEN) {
-        await fillFromFootballData(c, rec);
+      if (c.fdId && env.FOOTBALL_DATA_TOKEN) {
+        await fillFromFootballData(c, rec, env);
       } else {
-        await fillFromSportsDB(c, rec);
+        await fillFromSportsDB(c, rec, env);
       }
     } catch (e) {
       rec.note = 'live data unavailable';
       console.warn('football', c.key, e.message);
-      try { if (!rec.position) await fillFromSportsDB(c, rec); } catch {}
+      try { if (!rec.position) await fillFromSportsDB(c, rec, env); } catch {}
     }
     out.push(mergeClubRec(rec, prevClubs.find((p) => p.key === c.key)));
   }
 
   const payload = { clubs: out, updated: new Date().toISOString() };
-  if (store) { try { await store.setJSON('football', payload); } catch {} }
+  await kvPut(env, 'football', payload);
   return payload;
 }
 
-async function fillFromFootballData(c, rec) {
-  const H = { 'X-Auth-Token': process.env.FOOTBALL_DATA_TOKEN };
+async function fillFromFootballData(c, rec, env) {
+  const H = { 'X-Auth-Token': env.FOOTBALL_DATA_TOKEN };
   const standings = await j(`https://api.football-data.org/v4/competitions/${c.fdComp}/standings`, { headers: H });
   const table = (standings.standings.find((s) => s.type === 'TOTAL') || standings.standings[0]).table;
   const row = table.find((r) => r.team.id === c.fdId);
@@ -357,8 +369,8 @@ async function fillFromFootballData(c, rec) {
   } catch (e) { console.warn('fd last', e.message); }
 }
 
-async function fillFromSportsDB(c, rec) {
-  const key = process.env.SPORTSDB_KEY || '3';
+async function fillFromSportsDB(c, rec, env) {
+  const key = env.SPORTSDB_KEY || '3';
   const base = `https://www.thesportsdb.com/api/v1/json/${key}`;
   const search = await j(`${base}/searchteams.php?t=${encodeURIComponent(c.sdb)}`);
   const candidates = (search.teams || []).filter((t) =>
@@ -429,8 +441,6 @@ async function fillFromSportsDB(c, rec) {
 //  Auth: RTT_TOKEN is the refresh token from https://api-portal.rtt.io ,
 //  exchanged here for a ~20-minute access token (cached on the warm lambda).
 // ===========================================================================
-const STATION = process.env.TRAIN_STATION || 'MAI';
-const LONDON = process.env.TRAIN_LONDON || 'PAD';
 const RTT_BASE = 'https://data.rtt.io';
 
 let _rttAccess = null; // { token, exp }
@@ -444,8 +454,8 @@ function rttParse(s) {
   return new Date(asUTC - tzOffsetMs('Europe/London', new Date(asUTC)));
 }
 
-async function rttAccessToken() {
-  const refresh = process.env.RTT_TOKEN || process.env.RTT_PASSWORD;
+async function rttAccessToken(env) {
+  const refresh = env.RTT_TOKEN || env.RTT_PASSWORD;
   if (!refresh) return null;
   if (_rttAccess && _rttAccess.exp - 60000 > Date.now()) return _rttAccess.token;
   // the portal issues a refresh token; swap it for a short-life access token
@@ -492,8 +502,10 @@ function mapService(s, kind) {
   };
 }
 
-async function trains() {
-  const access = await rttAccessToken();
+async function trains(env) {
+  const STATION = env.TRAIN_STATION || 'MAI';
+  const LONDON = env.TRAIN_LONDON || 'PAD';
+  const access = await rttAccessToken(env);
   if (!access) return { toLondon: [], fromLondon: [], note: 'RTT_TOKEN not set' };
   const headers = { Authorization: `Bearer ${access}` };
 
@@ -525,14 +537,14 @@ async function trains() {
 // ===========================================================================
 //  ISS PASSES
 // ===========================================================================
-async function iss(q) {
+async function iss(q, env) {
   const lat = parseFloat(q.lat), lon = parseFloat(q.lon);
   const days = Math.min(10, parseInt(q.days || '5', 10));
   if (!isFinite(lat) || !isFinite(lon)) throw new Error('lat/lon required');
 
-  if (process.env.N2YO_API_KEY) {
+  if (env.N2YO_API_KEY) {
     try {
-      const r = await j(`https://api.n2yo.com/rest/v1/satellite/visualpasses/25544/${lat}/${lon}/0/${days}/30/&apiKey=${process.env.N2YO_API_KEY}`);
+      const r = await j(`https://api.n2yo.com/rest/v1/satellite/visualpasses/25544/${lat}/${lon}/0/${days}/30/&apiKey=${env.N2YO_API_KEY}`);
       const passes = (r.passes || []).map((p) => ({
         start: new Date(p.startUTC * 1000).toISOString(),
         max: new Date(p.maxUTC * 1000).toISOString(),
@@ -561,9 +573,9 @@ async function iss(q) {
 //  FORMULA 1  (Jolpica — the drop-in successor to the retired Ergast API)
 // ===========================================================================
 const F1_BASE = 'https://api.jolpi.ca/ergast/f1';
-const F1_DRIVER = process.env.F1_DRIVER_ID || 'colapinto';
 
-async function f1() {
+async function f1(env) {
+  const F1_DRIVER = (env.F1_DRIVER_ID || 'colapinto').toLowerCase();
   const [nextRaw, standRaw] = await Promise.all([
     j(`${F1_BASE}/current/next.json`),
     j(`${F1_BASE}/current/driverstandings.json`),
@@ -630,7 +642,7 @@ function albumQuery(dateValues, extraFilter, order) {
 } ORDER BY ${order} LIMIT 8`;
 }
 
-async function music() {
+async function music(env) {
   const now = new Date();
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(now.getUTCDate()).padStart(2, '0');
@@ -719,7 +731,7 @@ const QUOTES = [
 
 const QUOTES_PER_DAY = 6;
 
-async function quote() {
+async function quote(env) {
   // Cover ids were resolved from Open Library once and baked in, so this
   // endpoint makes no external calls: instant, and immune to their rate limit.
   const day = Math.floor(Date.now() / 864e5);

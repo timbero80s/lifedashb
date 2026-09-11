@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wall-dashboard",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-11",
+
+  // The dashboard's static files. Requests for them never reach the Worker,
+  // and on Cloudflare static asset requests are free and unlimited.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    // only these paths run the Worker; everything else is served as a file
+    "run_worker_first": ["/api", "/api/*"]
+  },
+
+  // Last-good football data, so a rate-limited upstream never blanks the card.
+  "kv_namespaces": [
+    { "binding": "CACHE", "id": "a72a07453cd64738999d58738063c014" }
+  ],
+
+  // Non-secret settings. Secrets are set with `wrangler secret put NAME`.
+  "vars": {
+    "TRAIN_STATION": "MAI",
+    "TRAIN_LONDON": "PAD",
+    "SPORTSDB_KEY": "123",
+    "F1_DRIVER_ID": "colapinto"
+  },
+
+  "observability": { "enabled": true }
+}

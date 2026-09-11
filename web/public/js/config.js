@@ -144,9 +144,7 @@ export const CONFIG = {
   },
 
   // --- Backend -------------------------------------------------------------
-  // On the deployed site this is same-origin. When previewing from a local
-  // static server there are no functions, so borrow the live ones.
-  apiBase: /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)
-    ? 'https://timbero-wall-dashboard.netlify.app/api'
-    : '/api',
+  // The Worker serves the static files and /api from the same origin, both in
+  // `wrangler dev` and in production, so this is always relative.
+  apiBase: '/api',
 };
