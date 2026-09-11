@@ -47,14 +47,17 @@ export const CONFIG = {
   //  HOUSEHOLD  ← the bit you need to fill in
   // ==========================================================================
   household: {
-    // Bins. `day` is the evening they go OUT (0=Sun, 1=Mon … 6=Sat).
-    // Blue + food every week; green and black alternate. The cycle is
-    // derived from anchorDate/anchorType, taken from the calendar entries
-    // "Green and Blue Bins" (Thu 10 Sep) and "Black and Blue bins" (Thu 17).
+    // Bins. `day` is the COLLECTION day (0=Sun, 1=Mon … 6=Sat); the card
+    // prompts you the evening before. Schedule confirmed against the council's
+    // own lookup for 16a Cannon Court Road (UPRN 100080352631):
+    //   Fri 11 Sep  Garden + Recycling
+    //   Fri 18 Sep  Refuse + Recycling
+    //   Fri 25 Sep  Garden + Recycling
+    // i.e. recycling every week; garden (green) and refuse (black) alternate.
     bins: {
       enabled: true,
-      day: 4,                       // Thursday night
-      anchorDate: '2026-09-10',
+      day: 5,                       // Friday
+      anchorDate: '2026-09-11',     // a Friday the GREEN bin went out
       anchorType: 'green',
       alternating: [
         { key: 'green', label: 'Green', colour: '#30D158' },

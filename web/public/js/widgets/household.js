@@ -13,13 +13,14 @@ function localMidnight(dateStr) {
   return Date.UTC(y, m - 1, d);
 }
 
-// The next bin night on or after today, and which bins go out on it.
-// `bins.day` is the evening they go OUT, so today still counts until late.
+// The next collection on or after today, and which bins are in it.
+// `bins.day` is the COLLECTION day; it still counts as "today" into the
+// evening so the card shows what went out this morning.
 function nextCollection(bins, now, tz) {
   const p = tzParts(now, tz);
   const todayUTC = Date.UTC(p.year, p.month - 1, p.day);
   let offset = (bins.day - new Date(todayUTC).getUTCDay() + 7) % 7;
-  if (offset === 0 && p.hour >= 22) offset = 7;   // they're out; roll on a week
+  if (offset === 0 && p.hour >= 20) offset = 7;   // done for today; roll on a week
   const dateUTC = todayUTC + offset * 864e5;
 
   const alt = bins.alternating || [];
@@ -118,10 +119,11 @@ export function initHousehold() {
       }
       body.append(main);
 
-      const tonight = offset === 0;
-      const when = tonight ? 'Out tonight'
-        : offset === 1 ? `${DAYS[cfg.bins.day]} — tomorrow night`
-        : `${DAYS[cfg.bins.day]} night · ${offset} days`;
+      // the action is putting them out the night before collection
+      const tonight = offset === 1;
+      const when = offset === 0 ? 'Collected today'
+        : tonight ? 'Out tonight'
+        : `${DAYS[cfg.bins.day]} · ${offset} days`;
       body.append(el('div', { class: 'hh-when' + (tonight ? ' due' : ''), text: when }));
 
       if (tonight) {
