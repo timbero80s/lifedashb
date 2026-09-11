@@ -1,5 +1,5 @@
 import { CONFIG } from './config.js';
-import { $, every, minutesSinceMidnight, tzParts, fmtTime } from './util.js';
+import { $, every, minutesSinceMidnight, tzParts, fmtTime, fetchJSON } from './util.js';
 import { getCoords } from './location.js';
 import { initClock } from './widgets/clock.js';
 import { initWeather } from './widgets/weather.js';
@@ -64,6 +64,20 @@ function applyNight() {
   document.documentElement.style.setProperty('--gain', gain.toFixed(2));
 }
 
+// The wall runs for weeks without anyone touching it, so it has to notice
+// when it is serving old code. Poll the deployed version; reload if it moved.
+function watchForUpdates() {
+  let booted = null;
+  every(15, async () => {
+    try {
+      const r = await fetchJSON(`${CONFIG.apiBase}?service=version`, {}, 8000);
+      if (!r || !r.version) return;
+      if (booted === null) { booted = r.version; return; }
+      if (r.version !== booted) location.reload();
+    } catch { /* offline is not a reason to reload */ }
+  });
+}
+
 async function main() {
   fit();
   window.addEventListener('resize', fit);
@@ -86,6 +100,7 @@ async function main() {
   initMusic();
   initHousehold();
   initQuote();
+  watchForUpdates();
 }
 
 main();

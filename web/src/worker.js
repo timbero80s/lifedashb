@@ -22,7 +22,7 @@ const headers = (seconds) => ({
 // RTT's free tier: 10/min, 100/hour, 1000/DAY — the daily cap is the binding
 // one. Each origin hit costs 2 location calls, so a 300s edge TTL over ~18
 // waking hours is 12*2*18 = 432/day. The widget also stops polling overnight.
-const TTL = { calendar: 300, football: 1800, trains: 300, iss: 3600, f1: 3600, music: 21600, quote: 21600 };
+const TTL = { calendar: 300, football: 1800, trains: 300, iss: 3600, f1: 3600, music: 21600, quote: 21600, version: 60 };
 
 // a response we don't want cached for long because upstream probably choked
 function isThin(service, data) {
@@ -67,6 +67,8 @@ export default {
         case 'f1':       data = await f1(env); break;
         case 'music':    data = await music(env); break;
         case 'quote':    data = await quote(env); break;
+        // lets the wall notice it is running old code and reload itself
+        case 'version':  data = { version }; break;
         default:
           return new Response(JSON.stringify({ error: 'unknown service' }),
             { status: 400, headers: headers(60) });
@@ -309,7 +311,12 @@ function mergeClubRec(fresh, prev) {
     out.position = prev.position; out.played = prev.played; out.points = prev.points;
   }
   if (!out.form && prev.form) out.form = prev.form;
-  if (!out.lastMatch && prev.lastMatch) out.lastMatch = prev.lastMatch;
+  // Only carry a previous result forward if it is still plausibly the last
+  // one. A month-old "last result" is worse than showing none.
+  if (!out.lastMatch && prev.lastMatch && prev.lastMatch.utcDate
+      && Date.now() - new Date(prev.lastMatch.utcDate).getTime() < 14 * 864e5) {
+    out.lastMatch = prev.lastMatch;
+  }
   if (!out.nextMatch && prev.nextMatch && new Date(prev.nextMatch.utcDate).getTime() > Date.now()) {
     out.nextMatch = prev.nextMatch;
   }
@@ -371,6 +378,7 @@ async function fillFromFootballData(c, rec, env) {
         opponent: (home ? m.awayTeam.shortName || m.awayTeam.name : m.homeTeam.shortName || m.homeTeam.name),
         homeAway: home ? '(H)' : '(A)',
         score: `${m.score.fullTime.home}-${m.score.fullTime.away}`,
+        utcDate: m.utcDate,
       };
     }
   } catch (e) { console.warn('fd last', e.message); }
@@ -438,6 +446,7 @@ async function fillFromSportsDB(c, rec, env) {
         opponent: home ? m.strAwayTeam : m.strHomeTeam,
         homeAway: home ? '(H)' : '(A)',
         score: (m.intHomeScore != null) ? `${m.intHomeScore}-${m.intAwayScore}` : '',
+        utcDate: m.strTimestamp || (m.dateEvent ? `${m.dateEvent}T15:00:00Z` : null),
       };
     }
   } catch { /* ignore */ }

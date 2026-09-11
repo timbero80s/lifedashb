@@ -1,5 +1,5 @@
 import { CONFIG } from '../config.js';
-import { $, el, fetchJSON, withCache, every, cache, fmtDay, fmtTime } from '../util.js';
+import { $, el, fetchJSON, withCache, every, fmtDay, fmtTime } from '../util.js';
 import { reportStatus } from '../bus.js';
 
 const ord = (n) => {
@@ -7,23 +7,6 @@ const ord = (n) => {
   const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
 };
-
-// Free football sources are rate-limited and flaky, so a fresh fetch often
-// comes back thinner than the last. Keep the best we have seen per club.
-function mergeClub(fresh, prev) {
-  if (!prev) return fresh;
-  const out = { ...fresh };
-  if (!out.position && prev.position) {
-    out.position = prev.position; out.played = prev.played; out.points = prev.points;
-  }
-  if (!out.form && prev.form) out.form = prev.form;
-  if (!out.lastMatch && prev.lastMatch) out.lastMatch = prev.lastMatch;
-  if (!out.nextMatch && prev.nextMatch && new Date(prev.nextMatch.utcDate) > Date.now()) {
-    out.nextMatch = prev.nextMatch;
-  }
-  if (out.position || out.nextMatch || out.lastMatch) out.note = null;
-  return out;
-}
 
 function resultClass(score, homeAway) {
   if (!score || !/^\d+-\d+$/.test(score)) return '';
@@ -37,11 +20,13 @@ export function initFootball() {
   const card = $('#c-fb');
 
   async function load() {
-    const prev = (cache.get('football') || {}).value || null;
+    // No merging here: the Worker already merges against KV and knows which
+    // source each field came from. Doing it a second time in the browser was
+    // resurrecting results that were weeks out of date.
     const { value, stale } = await withCache('football', async () => {
       const r = await fetchJSON(`${CONFIG.apiBase}?service=football`, {}, 20000);
       if (!r || !Array.isArray(r.clubs)) throw new Error('bad football payload');
-      return r.clubs.map((c) => mergeClub(c, prev && prev.find((p) => p.key === c.key)));
+      return r.clubs;
     });
     if (!value) { reportStatus('football', 'down'); return; }
     reportStatus('football', stale ? 'stale' : 'ok');
